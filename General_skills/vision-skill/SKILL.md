@@ -9,11 +9,12 @@ description: 识别图片内容。当用户发送图片、截图、报错图，�
 
 ## 配置（首次使用）
 
-1. 复制 `templates/.env.example` 为技能目录下的 `.env`（或直接导出环境变量），填入：
+1. 复制 `templates/.env.example` 为技能目录下的 `.env`（脚本启动时自动加载，无需额外依赖），填入：
    - `VISION_API_URL`：视觉模型 OpenAI 兼容接口地址
    - `VISION_MODEL`：模型名
    - `VISION_API_KEY`：API Key
-2. 运行 `python scripts/vision.py --check` 自检，确认配置生效。
+   也可以直接导出同名环境变量；**环境变量优先级高于 `.env` 文件**（便于 CI/容器注入）。
+2. 在技能目录下运行 `python scripts/vision.py --check` 自检，确认配置生效。
 
 本技能不硬编码任何模型地址、模型名或密钥，全部通过环境变量注入。
 
@@ -28,7 +29,7 @@ description: 识别图片内容。当用户发送图片、截图、报错图，�
 2. 运行脚本识别图片：
 
    ```powershell
-   python <技能目录>/scripts/vision.py "<图片绝对路径>" "（可选）具体识图要求"
+   cd <技能目录>; python scripts/vision.py "<图片绝对路径>" "（可选）具体识图要求"
    ```
 
 3. 脚本输出图片的文字描述（可能较长），基于描述回答用户的问题；描述中的重要文字、报错信息要原样转述。
