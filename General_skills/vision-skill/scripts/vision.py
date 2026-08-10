@@ -35,6 +35,38 @@ import sys
 import urllib.error
 import urllib.request
 
+
+def _load_dotenv():
+    """轻量 .env 加载（不引入第三方依赖）。
+
+    查找顺序：<技能根目录>/.env（推荐位置）→ <脚本目录>/.env。
+    优先级：真实环境变量 > .env 文件（便于 CI/容器注入覆盖）。
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(os.path.dirname(script_dir), ".env"),
+        os.path.join(script_dir, ".env"),
+    ]
+    for path in candidates:
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                for raw in f:
+                    line = raw.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, value = line.partition("=")
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key and key not in os.environ:
+                        os.environ[key] = value
+        except OSError:
+            continue
+
+
+_load_dotenv()
+
 # ── 配置（环境变量 / .env）──────────────────────────────────────────
 VISION_API_URL = os.environ.get("VISION_API_URL", "").strip()
 VISION_MODEL = os.environ.get("VISION_MODEL", "").strip()
