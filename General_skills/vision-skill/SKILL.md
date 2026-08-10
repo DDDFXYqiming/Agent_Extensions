@@ -10,7 +10,7 @@ description: 识别图片内容。当用户发送图片、截图、报错图，�
 ## 配置（首次使用）
 
 1. 复制 `templates/.env.example` 为技能目录下的 `.env`（脚本启动时自动加载，无需额外依赖），填入：
-   - `VISION_API_URL`：视觉模型 OpenAI 兼容接口地址
+   - `VISION_API_URL`：视觉模型 OpenAI 兼容**完整接口地址**（含路径，如 `https://api.example.com/v1/chat/completions`）
    - `VISION_MODEL`：模型名
    - `VISION_API_KEY`：API Key
    也可以直接导出同名环境变量；**环境变量优先级高于 `.env` 文件**（便于 CI/容器注入）。
