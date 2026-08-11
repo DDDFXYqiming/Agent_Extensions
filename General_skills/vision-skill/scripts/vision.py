@@ -311,6 +311,22 @@ def check():
     return ok
 
 
+def _setup_io():
+    """统一输出编码，避免 PowerShell 管道/重定向下中文乱码。
+
+    - 交互终端（TTY）：保持 Python 默认；Windows 控制台原生走 Unicode
+      （WriteConsoleW），强制 UTF-8 反而可能按代码页误显示。
+    - 管道 / 重定向：stdout 与 stderr 都强制 UTF-8，避免 Python 默认按
+      GBK 输出后被按 UTF-8 或其他编码误读导致乱码。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if not stream.isatty():
+                stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="识图（可配置视觉模型）")
     parser.add_argument("image", nargs="?", help="主图片路径")
@@ -332,7 +348,7 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    sys.stdout.reconfigure(encoding="utf-8")
+    _setup_io()
     if args.check:
         sys.exit(0 if check() else 1)
 

@@ -34,6 +34,21 @@ description: 识别图片内容。当用户发送图片、截图、报错图，�
 
 3. 脚本输出图片的文字描述（可能较长），基于描述回答用户的问题；描述中的重要文字、报错信息要原样转述。
 
+## Windows PowerShell 乱码处理
+
+脚本已自动区分“交互终端”和“管道/重定向”：
+
+- 交互终端（Windows Terminal / 新版 PowerShell 7）：脚本保持 Python 默认控制台编码，中文正常显示，无需额外设置。
+- 管道 / 重定向（含 Codex 等工具调用）：脚本自动把 stdout 和 stderr 强制为 UTF-8，输出应保持中文正常。
+
+如果仍出现乱码（例如旧版控制台代码页为 936），先执行下面一行再运行脚本：
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; $env:PYTHONIOENCODING = 'utf-8'
+```
+
+重定向到文件时，输出文件为 UTF-8 编码，请用 `Get-Content -Encoding UTF8` 读取。
+
 ## 常用选项（按场景选择）
 
 | 场景 | 命令 |
