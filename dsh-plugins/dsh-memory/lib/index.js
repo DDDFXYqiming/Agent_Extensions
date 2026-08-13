@@ -1,4 +1,4 @@
-// dsh-memory — DSH 跨会话长期记忆插件（v0.1）。
+// dsh-memory — DSH 跨会话长期记忆插件（v0.2）。
 //
 // 分层记忆（L0 元规则 / L1 索引 / L2 事实 / L3 SOP）+ 行动验证公理，
 // 写入永远由模型/用户主动发起。
@@ -10,10 +10,10 @@
 //   sops/*.md                  L3 任务 SOP
 //   file_access_stats.json     读取热度统计（轻量）
 //
-// 注入（GA 的 get_global_memory 等价物）：
+// 注入（存在性编码：L1 索引每轮可见）：
 //   ctx.systemPrompt.context({ name: 'memory:index', order: 10,
 //     text: () => readIndex() }) —— 每次组装请求实时读 L1，模型每轮都"知道有什么记忆可用"，
-//   需要细节时通过 memory_read/memory_list 取 L2/L3（存在性编码，GA 核心哲学）。
+//   需要细节时通过 memory_read/memory_list 取 L2/L3。
 //
 // 写入触发（GA 的 start_long_term_update 等价物）：
 //   memory_write 工具，由模型/用户在任务完成且【行动验证成功】时主动调用；
@@ -60,7 +60,7 @@ const L0_TEMPLATE = `# Memory Management SOP (L0)
 `;
 
 const INDEX_TEMPLATE = `# [Memory Index - L1]
-4层记忆: L0规则(memory_management_sop.md) | L1索引(this) | L2事实(facts.md) | L3技能(sops/)
+分层记忆: L0规则(memory_management_sop.md) | L1索引(this) | L2事实(facts.md) | L3技能(sops/)
 需要细节时用 memory_read / memory_list 取 L2/L3；新增经验用 memory_write（须带证据）
 任务完成且【行动验证成功】时主动 memory_write 沉淀（无需等用户提醒；无验证信息则不写）
 <!-- AUTO-BEGIN -->
@@ -135,12 +135,18 @@ function sopNames(memDir) {
 	}
 }
 
-/** 确保 L1 固定段含常驻规则行（对已存在的旧索引也生效）。 */
+/** 确保 L1 固定段含常驻规则行、表述与最新模板一致（对已存在的旧索引也生效）。 */
 function ensureIndexRule(memDir) {
 	const p = join(memDir, "index.txt");
 	if (!existsSync(p)) return;
 	let cur = readFileSync(p, "utf8");
-	if (cur.includes("任务完成且【行动验证成功】")) return;
+	// 表述迁移：避免与 L0-L4 分层混淆（我们只有 L0-L3）
+	cur = cur.replace("4层记忆: L0规则", "分层记忆: L0规则");
+	cur = cur.replace("4层记忆", "分层记忆");
+	if (cur.includes("任务完成且【行动验证成功】")) {
+		if (cur !== readFileSync(p, "utf8")) writeFileSync(p, cur, "utf8");
+		return;
+	}
 	const anchor = "新增经验用 memory_write（须带证据）";
 	if (cur.includes(anchor)) {
 		cur = cur.replace(anchor, anchor + "\n任务完成且【行动验证成功】时主动 memory_write 沉淀（无需等用户提醒；无验证信息则不写）");
@@ -151,7 +157,7 @@ function ensureIndexRule(memDir) {
 }
 
 /** 重建 index.txt 的自动段（L2 列表 + L3 列表），保留 AUTO 标记之外的 RULES 等。 */
-function syncIndex(memDir) {
+function syncIndex(memDir, maxIndexLines = 30) {
 	const p = join(memDir, "index.txt");
 	let head = INDEX_TEMPLATE;
 	let tail = "";
@@ -177,7 +183,7 @@ function syncIndex(memDir) {
 	writeFileSync(p, rebuilt, "utf8");
 	// 行数约束检查（仅报告，不强制截断——RULES 是手动段）
 	const lines = rebuilt.split("\n").length;
-	return { index_lines: lines, max_index_lines: 30, over_limit: lines > 30 };
+	return { index_lines: lines, max_index_lines: maxIndexLines, over_limit: lines > maxIndexLines };
 }
 
 /** upsert facts.md 的 ## SECTION（基于行解析，避免正则边界坑）。 */
@@ -240,7 +246,7 @@ async function apply(ctx, config = {}) {
 	const disposers = [];
 	const agentStates = new Map();
 
-	// ── 记忆注入（GA get_global_memory 等价物：L1 存在性索引每轮可见）──
+	// ── 记忆注入（L1 存在性索引每轮可见，缓存友好：快照追加式）──
 	if (ctx.systemPrompt) {
 		disposers.push(ctx.systemPrompt.context({
 			name: "memory:index",
@@ -270,6 +276,11 @@ async function apply(ctx, config = {}) {
 				});
 			} catch { /* agent 已 dispose 时忽略 */ }
 		}
+		return undefined;
+	}));
+	// agent 销毁时清理轮次计数（防 Map 无限增长）
+	disposers.push(ctx.on("agent/disposed", ({ agent }) => {
+		if (agent) turnCounters.delete(String(agent.id));
 		return undefined;
 	}));
 
@@ -313,7 +324,8 @@ async function apply(ctx, config = {}) {
 		},
 		async execute(args) {
 			const key = String(args.name).trim();
-			if (key === "index" || key === "l1") {
+			const lower = key.toLowerCase();
+			if (lower === "index" || lower === "l1" || lower === "索引") {
 				bumpAccess(cfg.memoryDir, "index");
 				return { name: key, source: "index.txt", content: readIndex(cfg.memoryDir) };
 			}
@@ -452,7 +464,7 @@ async function apply(ctx, config = {}) {
 					action = "created";
 				}
 			}
-			const index = syncIndex(cfg.memoryDir);
+			const index = syncIndex(cfg.memoryDir, cfg.maxIndexLines);
 			return { entry_type: type, topic, path, action, index };
 		},
 		presentCall(args) {
@@ -477,11 +489,11 @@ async function apply(ctx, config = {}) {
 			},
 			render: (_args, value) => [{
 				type: "text",
-				text: `索引已重建（${value.index_lines} 行${value.over_limit ? "，⚠️ 超过 30 行建议精简" : ""}）：\nL2: ${value.facts.join("、") || "（空）"}\nL3: ${value.sops.join("、") || "（空）"}`
+				text: `索引已重建（${value.index_lines} 行${value.over_limit ? "，⚠️ 超过限制建议精简" : ""}）：\nL2: ${value.facts.join("、") || "（空）"}\nL3: ${value.sops.join("、") || "（空）"}`
 			}]
 		},
 		execute() {
-			const r = syncIndex(cfg.memoryDir);
+			const r = syncIndex(cfg.memoryDir, cfg.maxIndexLines);
 			return { index_lines: r.index_lines, over_limit: r.over_limit, facts: factSections(cfg.memoryDir), sops: sopNames(cfg.memoryDir) };
 		},
 		presentCall() {
