@@ -13,7 +13,8 @@ Agent_Extensions/
 ├── General_skills/          # 通用智能体技能（Skill，跨框架可用）
 │   └── vision-skill/        # 识图技能：MiniMax-M3 视觉模型，Qwen 动态分辨率方法
 ├── dsh-plugins/              # DeepSeek Harness（DSH）标准插件
-│   └── dsh-vision-skill/    # 识图插件 v2.1：7 个工具 + 渐进式暴露 + Credential 化
+│   ├── dsh-vision-skill/    # 识图插件 v2.1：7 个工具 + 渐进式暴露 + Credential 化
+│   └── dsh-memory/          # 跨会话长期记忆：L1 注入 + 行动验证写入 + 分层管理
 ├── hermes_plugins/          # Hermes 框架插件
 │   └── language-router/     # 语言路由（planner-first）
 └── README.md
