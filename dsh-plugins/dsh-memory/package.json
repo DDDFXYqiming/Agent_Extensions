@@ -1,7 +1,7 @@
 {
   "name": "dsh-memory",
   "version": "0.1.0",
-  "description": "DSH 跨会话长期记忆：L1 索引注入（存在性编码）+ 行动验证写入 + 分层管理（index/facts/sops）。借鉴 GenericAgent 记忆系统，不含自进化。",
+  "description": "DSH 跨会话长期记忆：L1 索引注入（存在性编码）+ 行动验证写入 + 分层管理（index/facts/sops）。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
