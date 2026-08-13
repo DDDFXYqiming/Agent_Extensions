@@ -1,0 +1,41 @@
+{
+  "name": "dsh-vision-skill",
+  "version": "0.1.0",
+  "description": "DSH 标准插件版 vision skill：识别本地图片（vision_analyze）与剪贴板图片（vision_clipboard），默认 MiniMax-M3，思考关闭。无需任何框架补丁。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "scripts",
+    "SKILL.md",
+    "README.md"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "vision",
+    "ocr",
+    "text-only-llm",
+    "agent-skills"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/dsh-credentials": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-credentials": {
+      "optional": true
+    }
+  }
+}
