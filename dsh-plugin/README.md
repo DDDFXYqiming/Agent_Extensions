@@ -47,8 +47,8 @@ dsh-plugin/
 
 ```powershell
 # 1. 克隆仓库（或已有）
-git clone https://github.com/DDDFXYqiming/Agent_Resources.git
-cd Agent_Resources\dsh-plugin
+git clone https://github.com/DDDFXYqiming/Agent_Extensions.git
+cd Agent_Extensions\dsh-plugin
 
 # 2. 安装依赖（dsh-tools / dsh-credentials 从 registry 或 link 全局）
 pnpm add "@deepseek-ai/dsh-tools@rc" "@deepseek-ai/dsh-credentials@rc"
