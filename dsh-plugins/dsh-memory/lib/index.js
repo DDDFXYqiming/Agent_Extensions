@@ -62,6 +62,7 @@ const L0_TEMPLATE = `# Memory Management SOP (L0)
 const INDEX_TEMPLATE = `# [Memory Index - L1]
 4层记忆: L0规则(memory_management_sop.md) | L1索引(this) | L2事实(facts.md) | L3技能(sops/)
 需要细节时用 memory_read / memory_list 取 L2/L3；新增经验用 memory_write（须带证据）
+任务完成且【行动验证成功】时主动 memory_write 沉淀（无需等用户提醒；无验证信息则不写）
 <!-- AUTO-BEGIN -->
 [L2] （facts.md 的条目将在此列出）
 [L3] （sops/ 的文件将在此列出）
@@ -132,6 +133,21 @@ function sopNames(memDir) {
 	} catch {
 		return [];
 	}
+}
+
+/** 确保 L1 固定段含常驻规则行（对已存在的旧索引也生效）。 */
+function ensureIndexRule(memDir) {
+	const p = join(memDir, "index.txt");
+	if (!existsSync(p)) return;
+	let cur = readFileSync(p, "utf8");
+	if (cur.includes("任务完成且【行动验证成功】")) return;
+	const anchor = "新增经验用 memory_write（须带证据）";
+	if (cur.includes(anchor)) {
+		cur = cur.replace(anchor, anchor + "\n任务完成且【行动验证成功】时主动 memory_write 沉淀（无需等用户提醒；无验证信息则不写）");
+	} else {
+		cur = cur.replace("# [Memory Index - L1]", "# [Memory Index - L1]\n任务完成且【行动验证成功】时主动 memory_write 沉淀（无需等用户提醒；无验证信息则不写）");
+	}
+	writeFileSync(p, cur, "utf8");
 }
 
 /** 重建 index.txt 的自动段（L2 列表 + L3 列表），保留 AUTO 标记之外的 RULES 等。 */
@@ -219,6 +235,7 @@ async function apply(ctx, config = {}) {
 		progressive: config.progressive !== false && config.progressive !== "false",
 	};
 	ensureMemoryLayout(cfg.memoryDir);
+	ensureIndexRule(cfg.memoryDir);
 
 	const disposers = [];
 	const agentStates = new Map();
@@ -234,6 +251,27 @@ async function apply(ctx, config = {}) {
 			}
 		}));
 	}
+
+	// ── 周期记忆提醒（GA 每 10 轮刷新/提示的等价物：按 agent 独立计数，inject 轻量通知）──
+	const turnCounters = new Map();
+	disposers.push(ctx.on("turn/end", ({ agent }) => {
+		if (!agent || typeof agent.inject !== "function") return undefined;
+		const id = String(agent.id);
+		const n = (turnCounters.get(id) ?? 0) + 1;
+		turnCounters.set(id, n);
+		if (n % 10 === 0) {
+			try {
+				agent.inject({
+					content: [{
+						type: "text",
+						text: "[记忆检查] 已完成 10 轮。本任务是否产生了【行动验证成功】且未来可复用的经验？若有请用 memory_write 沉淀（须带 evidence）；若无则忽略本提醒。"
+					}],
+					source: { kind: "plugin", plugin: "memory" }
+				});
+			} catch { /* agent 已 dispose 时忽略 */ }
+		}
+		return undefined;
+	}));
 
 	// ── 运行时 skill（触发语义见 SKILL.md）──
 	ctx.skills.register({
