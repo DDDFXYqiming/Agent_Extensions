@@ -27,7 +27,7 @@ description: 识别图片内容。当用户发送图片、截图、报错图，�
 - **`vision_long_screenshot_ocr`**：超长截图分块 OCR——聊天记录/整个网页等超高图自动切块（带重叠）→ 逐块识别 → 合并全文，带块边界信息
 - **`vision_clipboard`**：读取剪贴板中的图片，保存到会话工作区 `.dsh-vision/` 后识别——用户在输入框粘贴图片被"当前模型不支持图片"拦截时，只需把图片复制到剪贴板（如 Win+Shift+S 截屏自动复制）后说"看图"即可
 - **渐进式工具暴露**：加载本 skill 后自动为当前 Agent 激活上述 7 个工具；若工具未出现，调用一次 `vision_activate` 兜底
-- **模型配置**走插件 config：`apiUrl` / `model` / `apiKey`（默认 MiniMax-M3；脚本请求体固定携带 `thinking: {"type": "disabled"}` 关闭思考）；密钥也支持 DSH Credential 引用（`credential: VISION_API_KEY`），推荐后者避免明文
+- **模型配置**走插件 config：`apiUrl` / `model` / `apiKey`（**任意 OpenAI 兼容的多模态模型均可接入**——如 Qwen-VL、MiniMax-M3、Gemini、GPT-4o 等；默认 MiniMax-M3，可直接替换。脚本请求体固定携带 `thinking: {"type": "disabled"}` 关闭思考，若模型不支持该参数可删）；密钥也支持 DSH Credential 引用（`credential: VISION_API_KEY`），推荐后者避免明文
 - **分辨率预算**：`budget` 支持 `small`(≈512²) / `normal`(≈1024²) / `large`(≈1448²) / `mega`(≈4096²，约 16M 像素超高清，对应 Qwen 官方高分辨率模式)
 - 识别流程：脚本输出描述后**原样转述**，重要文字、报错信息逐字复述，不概括、不脑补
 
