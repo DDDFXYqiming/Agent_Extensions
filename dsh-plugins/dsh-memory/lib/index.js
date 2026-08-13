@@ -376,6 +376,7 @@ async function apply(ctx, config = {}) {
 						additionalProperties: false,
 						properties: {
 							index_lines: { type: "integer" },
+							max_index_lines: { type: "integer" },
 							over_limit: { type: "boolean" }
 						}
 					}
