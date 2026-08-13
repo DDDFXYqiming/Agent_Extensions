@@ -59,24 +59,29 @@ pnpm add "@deepseek-ai/dsh-tools@rc" "@deepseek-ai/dsh-credentials@rc"
 #    然后在该目录执行 pnpm install
 ```
 
-### 方式二：插件命令
+### 方式二：插件命令（推荐，bundle 标准安装）
 
 ```powershell
 dsh plugin --profile web add <绝对路径>\dsh-plugins\dsh-vision-skill
 ```
 
-### 配置（cordis.patch.yml）
+安装后插件包自带的 `cordis.patch.yml` 会自动贡献 `id: vision-skill` 条目（进 profile 的 bundles 列表），**无需手动 insert**。配置默认值由插件内置的 Schemastery Config schema 提供（`apiUrl`=MiniMax / `model`=MiniMax-M3 / `credential`=VISION_API_KEY）。
+
+### 配置（覆盖 bundle 默认值）
+
+⚠️ **重要**：bundle 方式安装后，**不要**在 profile 的 `cordis.patch.yml` 里再 `insert` 一个 `id: vision-skill`——重复 id 会导致 `duplicate loader entry id` 启动崩溃。需要自定义配置时，用**裸条目按 id 覆盖**（不带 `insert:` 包装）：
 
 ```yaml
-- insert:
-    - id: vision-skill
-      name: 'dsh-vision-skill'
-      config:
-        apiUrl: '<你的多模态模型 OpenAI 兼容接口地址>'  # 如 https://api.minimaxi.com/v1/chat/completions
-        model: '<模型名>'                                # 如 MiniMax-M3 / qwen-vl-plus / gemini-2.5-flash
-        credential: 'VISION_API_KEY'   # 推荐：DSH Credential 引用
-        # apiKey: '<明文 key>'         # 兼容旧方式（不推荐）
+# profile cordis.patch.yml —— 裸条目覆盖 bundle 行（后写者胜，config 整行替换）
+- id: vision-skill
+  config:
+    apiUrl: '<你的多模态模型 OpenAI 兼容接口地址>'  # 如 https://api.minimaxi.com/v1/chat/completions
+    model: '<模型名>'                                # 如 MiniMax-M3 / qwen-vl-plus / gemini-2.5-flash
+    credential: 'VISION_API_KEY'   # 推荐：DSH Credential 引用
+    # apiKey: '<明文 key>'         # 兼容旧方式（不推荐）
 ```
+
+覆盖时只写要改的字段即可？——**不行**：patch 会替换目标行的**整个** config（不深合并），所以覆盖时要把需要保留的默认字段也一起写上（如上面的 apiUrl/model/credential 全量）。也可以不覆盖——直接用内置默认值（MiniMax-M3 + VISION_API_KEY 凭证引用），此时 profile 无需任何 vision-skill 行。
 
 Credential 值存到 `$DSH_HOME/.credentials.yaml`：
 
