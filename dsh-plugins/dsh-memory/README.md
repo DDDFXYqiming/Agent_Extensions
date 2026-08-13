@@ -1,6 +1,6 @@
 # dsh-memory
 
-**DeepSeek Harness（DSH）跨会话长期记忆插件** —— L1 索引注入（存在性编码）+ L2 环境事实 + L3 任务经验，借鉴 [GenericAgent](https://github.com/) 记忆系统（L0-L3 分层 + 行动验证公理），**不含自进化**（无后台调度、无自动装插件、无情绪挖掘）。
+**DeepSeek Harness（DSH）跨会话长期记忆插件** —— L1 索引注入（存在性编码）+ L2 环境事实 + L3 任务经验。
 
 ## 能力
 
@@ -13,7 +13,7 @@
 | `memory_write` | 写入记忆（fact/sop，**evidence 必填** = 行动验证公理） |
 | `memory_index` | 重建 L1 索引自动段（保留 [RULES] 手动段） |
 
-## 设计（与 GenericAgent 的对应）
+## 设计
 
 | GenericAgent | dsh-memory |
 |---|---|
@@ -24,7 +24,6 @@
 | `../memory/*_sop.md`（L3 SOP） | `sops/*.md`（slug 文件名） |
 | `file_access_stats.json` 热度 | 同款轻量热度统计 |
 | `memory_management_sop.md`（L0 公理） | 同款 L0 模板（行动验证/禁易变/最小指针/不删改） |
-| reflect/ 自进化调度 | ❌ **明确不做** |
 
 ## 安装
 
@@ -55,7 +54,7 @@ dsh plugin --profile web add E:\AI_Projects\dsh-plugins\dsh-memory
 └── file_access_stats.json     读取热度
 ```
 
-## 核心公理（继承自 GenericAgent）
+## 核心公理
 
 1. **行动验证**：No Execution, No Memory —— `memory_write` 的 evidence 必填，只写成功验证过的信息
 2. **神圣不可删改**：已验证事实可压缩/迁移，严禁丢弃
@@ -64,7 +63,7 @@ dsh plugin --profile web add E:\AI_Projects\dsh-plugins\dsh-memory
 
 ## KV Cache 友好性（重要设计决策）
 
-本插件的记忆注入**不会破坏 DSH 的 KV 缓存命中率**，这是刻意设计（GenericAgent 因"L1 拼进 next_prompt + 激进压缩"导致缓存命中率极低的教训）：
+本插件的记忆注入**不会破坏 DSH 的 KV 缓存命中率**，这是刻意设计：
 
 | 设计点 | 机制 | 缓存影响 |
 |---|---|---|

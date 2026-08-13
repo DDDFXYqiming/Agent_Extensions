@@ -1,14 +1,14 @@
 // dsh-memory — DSH 跨会话长期记忆插件（v0.1）。
 //
-// 设计源自 GenericAgent 记忆系统（L0-L3 分层 + 行动验证公理），
-// 但只保留"经验沉淀/检索"部分，不含自进化（后台调度/自动装插件/情绪挖掘）。
+// 分层记忆（L0 元规则 / L1 索引 / L2 事实 / L3 SOP）+ 行动验证公理，
+// 写入永远由模型/用户主动发起。
 //
 // 存储布局（默认 <home>/.dsh/memory/）：
 //   memory_management_sop.md   L0 元规则（怎么管记忆）
 //   index.txt                  L1 索引（≤30 行，存在性编码 + RULES）
 //   facts.md                   L2 环境事实库（## SECTION）
 //   sops/*.md                  L3 任务 SOP
-//   file_access_stats.json     读取热度统计（GA 同款，轻量）
+//   file_access_stats.json     读取热度统计（轻量）
 //
 // 注入（GA 的 get_global_memory 等价物）：
 //   ctx.systemPrompt.context({ name: 'memory:index', order: 10,
