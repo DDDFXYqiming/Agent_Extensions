@@ -38,8 +38,8 @@ Agent_Extensions/
 # 1. 克隆本仓库
 git clone https://github.com/DDDFXYqiming/Agent_Extensions.git
 
-# 2. 安装 dsh-vision-skill 插件（详见 dsh-plugins/README.md）
-cd dsh-plugins
+# 2. 安装 dsh-vision-skill 插件（详见 dsh-plugins/dsh-vision-skill/README.md）
+cd dsh-plugins\dsh-vision-skill
 pnpm add "@deepseek-ai/dsh-tools@rc" "@deepseek-ai/dsh-credentials@rc"
 
 # 3. link 进 web profile 并在 cordis.patch.yml 配置（credential 引用推荐）

@@ -33,7 +33,7 @@ Qwen 官方动态分辨率预处理（`smart_resize`：预算像素 + patch 网�
 ## 目录结构
 
 ```
-dsh-plugins/
+dsh-vision-skill/
 ├── lib/index.js          # 插件主体（skill 注册 + 7 工具 + 渐进暴露 + 围栏）
 ├── scripts/vision.py     # 识图脚本（动态分辨率 / OCR / grounding / 主色 / 长图分块）
 ├── SKILL.md              # 运行时 skill 内容（模型按需加载）
@@ -48,21 +48,21 @@ dsh-plugins/
 ```powershell
 # 1. 克隆仓库（或已有）
 git clone https://github.com/DDDFXYqiming/Agent_Extensions.git
-cd Agent_Extensions\dsh-plugins
+cd Agent_Extensions\dsh-plugins\dsh-vision-skill
 
 # 2. 安装依赖（dsh-tools / dsh-credentials 从 registry 或 link 全局）
 pnpm add "@deepseek-ai/dsh-tools@rc" "@deepseek-ai/dsh-credentials@rc"
 
 # 3. 注册到 web profile（link 方式，改源码即时生效）
 #    在 C:\Users\<user>\.dsh\profiles\web\package.json 的 dependencies 加：
-#    "dsh-vision-skill": "link:<绝对路径>\dsh-plugins"
+#    "dsh-vision-skill": "link:<绝对路径>\dsh-plugins\dsh-vision-skill"
 #    然后在该目录执行 pnpm install
 ```
 
 ### 方式二：插件命令
 
 ```powershell
-dsh plugin --profile web add <绝对路径>\dsh-plugins
+dsh plugin --profile web add <绝对路径>\dsh-plugins\dsh-vision-skill
 ```
 
 ### 配置（cordis.patch.yml）
@@ -107,5 +107,5 @@ OCR 这张图 <路径>          → vision_ocr
 ## 相关
 
 - 脚本独立运行：见 `templates/.env.example`，`python scripts/vision.py <图> --check`
-- 通用技能源：[General_skills/vision-skill](../General_skills/vision-skill)
+- 通用技能源：[General_skills/vision-skill](../../General_skills/vision-skill)
 - 授权：MIT
