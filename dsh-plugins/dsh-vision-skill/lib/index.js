@@ -19,6 +19,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
+import Schema from "@deepseek-ai/schemastery";
 
 const name = "vision-skill";
 const inject = ["skills", "tools", "credentials", "agents"];
@@ -26,6 +27,23 @@ const inject = ["skills", "tools", "credentials", "agents"];
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
 const SKILL_MD = join(PLUGIN_DIR, "..", "SKILL.md");
 const VISION_PY = join(PLUGIN_DIR, "..", "scripts", "vision.py");
+
+/**
+ * Schemastery 配置 schema（官方 config 约定：Cordis 在加载时校验配置并填充默认值）。
+ * 校验失败会让插件加载失败并给出明确错误；progressive 接受 string 以兼容 'false' 写法。
+ */
+export const Config = Schema.object({
+	apiUrl: Schema.string().default("https://api.minimaxi.com/v1/chat/completions"),
+	model: Schema.string().default("MiniMax-M3"),
+	apiKey: Schema.string().default(""),
+	credential: Schema.string().default("VISION_API_KEY"),
+	python: Schema.string().default("python"),
+	pwsh: Schema.string().default("powershell.exe"),
+	timeoutMs: Schema.number().default(180000),
+	concurrency: Schema.number().default(2),
+	progressive: Schema.union([Schema.boolean(), Schema.string()]).default(true),
+	allowedDirs: Schema.array(Schema.string()).default([]),
+});
 
 /** 与 templates/.env.example 同语义的默认值（可被插件 config 覆盖）。 */
 const DEFAULTS = {
