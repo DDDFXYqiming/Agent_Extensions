@@ -1,7 +1,7 @@
 {
   "name": "dsh-vision-skill",
-  "version": "0.1.0",
-  "description": "DSH 标准插件版 vision skill：识别本地图片（vision_analyze）与剪贴板图片（vision_clipboard），默认 MiniMax-M3，思考关闭。无需任何框架补丁。",
+  "version": "0.2.0",
+  "description": "DSH 标准插件版 vision skill：识别本地图片（vision_analyze/vision_ocr/vision_ground/vision_detect/vision_dominant_colors/vision_long_screenshot_ocr/vision_clipboard），默认 MiniMax-M3，思考关闭。零框架补丁。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -19,7 +19,7 @@
   "keywords": [
     "deepseek-harness",
     "dsh",
-    "dsh-plugin",
+    "dsh-plugins",
     "vision",
     "ocr",
     "text-only-llm",
