@@ -28,7 +28,7 @@
 
 ## 识图核心方法
 
-Qwen 官方动态分辨率预处理（`smart_resize`：预算像素 + patch 网格吸附）→ OpenAI 兼容 VLM（默认 **MiniMax-M3**，`thinking: disabled` 关闭思考，中文优先）。Grounding 采用 Qwen 官方方法：VLM 输出 0-1000 归一化 bbox → 解析 JSON / `<ref><box>` 双格式 → 映射像素坐标。
+Qwen 官方动态分辨率预处理（`smart_resize`：预算像素 + patch 网格吸附）→ **任意 OpenAI 兼容多模态模型**（默认 MiniMax-M3，`thinking: disabled` 关闭思考，可替换）。Grounding 采用 Qwen 官方方法：VLM 输出 0-1000 归一化 bbox → 解析 JSON / `<ref><box>` 双格式 → 映射像素坐标。
 
 ## 目录结构
 
@@ -72,8 +72,8 @@ dsh plugin --profile web add <绝对路径>\dsh-plugins\dsh-vision-skill
     - id: vision-skill
       name: 'dsh-vision-skill'
       config:
-        apiUrl: 'https://api.minimaxi.com/v1/chat/completions'
-        model: 'MiniMax-M3'
+        apiUrl: '<你的多模态模型 OpenAI 兼容接口地址>'  # 如 https://api.minimaxi.com/v1/chat/completions
+        model: '<模型名>'                                # 如 MiniMax-M3 / qwen-vl-plus / gemini-2.5-flash
         credential: 'VISION_API_KEY'   # 推荐：DSH Credential 引用
         # apiKey: '<明文 key>'         # 兼容旧方式（不推荐）
 ```
@@ -90,7 +90,7 @@ VISION_API_KEY: sk-xxxx
 
 - Node.js + DSH（`@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-credentials`）
 - Python 3 + Pillow（`pip install pillow`；`vision.py --check` 自检）
-- 视觉模型 API Key（默认 MiniMax-M3；任意 OpenAI 兼容端点均可）
+- 视觉模型 API Key（**任意 OpenAI 兼容的多模态模型**：Qwen-VL / MiniMax-M3 / Gemini / GPT-4o 等，默认 MiniMax-M3）
 
 ## 图片怎么喂给插件（三种方式）
 
