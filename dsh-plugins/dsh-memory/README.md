@@ -15,15 +15,15 @@
 
 ## 设计
 
-| GenericAgent | dsh-memory |
+| 机制 | 说明 |
 |---|---|
-| `get_global_memory()` 启动注入 + 每 10 轮刷新 | `ctx.systemPrompt.context` 每轮实时注入 L1（更频繁，改动即时生效） |
-| `start_long_term_update` 工具（模型主动蒸馏） | `memory_write` 工具（模型/用户主动，evidence 强制） |
-| `global_mem_insight.txt`（L1 ≤30 行） | `index.txt`（含 `<!-- AUTO -->` 自动段 + `[RULES]` 手动段） |
-| `global_mem.txt`（L2 事实） | `facts.md`（`## SECTION` upsert） |
-| `../memory/*_sop.md`（L3 SOP） | `sops/*.md`（slug 文件名） |
-| `file_access_stats.json` 热度 | 同款轻量热度统计 |
-| `memory_management_sop.md`（L0 公理） | 同款 L0 模板（行动验证/禁易变/最小指针/不删改） |
+| L1 索引注入 | `ctx.systemPrompt.context` 每轮实时注入 L1（读文件，改动即时生效，无需重载） |
+| 写入工具 | `memory_write`（模型/用户主动，evidence 强制） |
+| L1 索引 | `index.txt`（≤30 行，`<!-- AUTO -->` 自动段 + `[RULES]` 手动段） |
+| L2 事实库 | `facts.md`（`## SECTION` upsert） |
+| L3 经验库 | `sops/*.md`（slug 文件名） |
+| 热度统计 | `file_access_stats.json`（轻量） |
+| L0 元规则 | `memory_management_sop.md`（行动验证/禁易变/最小指针/不删改） |
 
 ## 安装
 
@@ -72,8 +72,8 @@ dsh plugin --profile web add E:\AI_Projects\dsh-plugins\dsh-memory
 | L1 内容低频变化 | 只有 `memory_write`/`memory_index` 才改索引（任务完成级频率） | ✅ 快照文本长期稳定 |
 | L1 ≤30 行 | 存在性编码，注入体积极小 | ✅ 每轮成本极低 |
 
-**与业界最佳实践对照**（GA/Hermes 的教训）：
-- ❌ 反面：Hermes 的 [Honcho 注入 bug](https://github.com/NousResearch/hermes-agent/issues/13631)（每 N 轮重建缓存的 system prompt → 前缀缓存全部失效）；GA 的 L1 拼进对话中间
+**与业界最佳实践对照**：
+- ❌ 反面：[Hermes 的 Honcho 注入 bug](https://github.com/NousResearch/hermes-agent/issues/13631)——自动注入的上下文每 N 轮**重建缓存的 system prompt**，前缀缓存全部失效，命中率崩
 - ✅ 正面：[deftai/directive 的架构原则](https://github.com/deftai/directive/issues/836)（把缓存的 system prompt 层与每轮的临时注入分离）；[prompt caching 架构纪律](https://github.com/agentpatterns-ai/website/blob/main/context-engineering/prompt-caching-architectural-discipline.md)
 - DSH 的 context 快照机制本身即实现了"缓存层与注入层分离"，本插件只是使用者
 
