@@ -62,7 +62,23 @@ dsh plugin --profile web add E:\AI_Projects\dsh-plugins\dsh-memory
 3. **禁易变状态**：时间戳/PID/临时路径不存
 4. **最小充分指针**：L1 只写存在性，细节在 L2/L3 按需取
 
+## KV Cache 友好性（重要设计决策）
+
+本插件的记忆注入**不会破坏 DSH 的 KV 缓存命中率**，这是刻意设计（GenericAgent 因"L1 拼进 next_prompt + 激进压缩"导致缓存命中率极低的教训）：
+
+| 设计点 | 机制 | 缓存影响 |
+|---|---|---|
+| 注入走 `systemPrompt.context`（user-role 快照） | 快照是**独立 user 消息**，不进 system prompt | ✅ system prompt 前缀完全不动 |
+| 快照"变化才追加"（`RuntimeContextProjection.project` 源码：`if (retained.text === snapshot) return`） | 内容不变 → 不产生新消息；变了 → **追加**新消息，旧历史原样保留 | ✅ 历史前缀稳定，缓存命中不破坏 |
+| L1 内容低频变化 | 只有 `memory_write`/`memory_index` 才改索引（任务完成级频率） | ✅ 快照文本长期稳定 |
+| L1 ≤30 行 | 存在性编码，注入体积极小 | ✅ 每轮成本极低 |
+
+**与业界最佳实践对照**（GA/Hermes 的教训）：
+- ❌ 反面：Hermes 的 [Honcho 注入 bug](https://github.com/NousResearch/hermes-agent/issues/13631)（每 N 轮重建缓存的 system prompt → 前缀缓存全部失效）；GA 的 L1 拼进对话中间
+- ✅ 正面：[deftai/directive 的架构原则](https://github.com/deftai/directive/issues/836)（把缓存的 system prompt 层与每轮的临时注入分离）；[prompt caching 架构纪律](https://github.com/agentpatterns-ai/website/blob/main/context-engineering/prompt-caching-architectural-discipline.md)
+- DSH 的 context 快照机制本身即实现了"缓存层与注入层分离"，本插件只是使用者
+
 ## 相关
 
-- 底层接缝：`ctx.systemPrompt.context` / `ctx.skills.register` / `ctx.tools.register`（全部官方 API，零框架补丁）
+- 底层接缝：`ctx.systemPrompt.context` / `ctx.skills.register` / `ctx.tools.register` / `turn/end` 事件 + `agent.inject`（全部官方 API，零框架补丁）
 - 授权：MIT
