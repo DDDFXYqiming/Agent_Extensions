@@ -12,7 +12,7 @@
 Agent_Extensions/
 ├── General_skills/          # 通用智能体技能（Skill，跨框架可用）
 │   └── vision-skill/        # 识图技能：MiniMax-M3 视觉模型，Qwen 动态分辨率方法
-├── dsh-plugin/              # DeepSeek Harness（DSH）标准插件
+├── dsh-plugins/              # DeepSeek Harness（DSH）标准插件
 │   └── dsh-vision-skill/    # 识图插件 v2.1：7 个工具 + 渐进式暴露 + Credential 化
 ├── hermes_plugins/          # Hermes 框架插件
 │   └── language-router/     # 语言路由（planner-first）
@@ -30,7 +30,7 @@ Agent_Extensions/
 # 复制目录到你的 agent 的 skills 目录，按 skill 内 README/.env.example 配置视觉模型
 ```
 
-### DSH 标准插件（dsh-plugin）
+### DSH 标准插件（dsh-plugins）
 
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的官方扩展接缝（`ctx.skills` / `ctx.tools` / `ctx.credentials`），**零框架补丁**：
 
@@ -38,8 +38,8 @@ Agent_Extensions/
 # 1. 克隆本仓库
 git clone https://github.com/DDDFXYqiming/Agent_Extensions.git
 
-# 2. 安装 dsh-vision-skill 插件（详见 dsh-plugin/README.md）
-cd dsh-plugin
+# 2. 安装 dsh-vision-skill 插件（详见 dsh-plugins/README.md）
+cd dsh-plugins
 pnpm add "@deepseek-ai/dsh-tools@rc" "@deepseek-ai/dsh-credentials@rc"
 
 # 3. link 进 web profile 并在 cordis.patch.yml 配置（credential 引用推荐）
