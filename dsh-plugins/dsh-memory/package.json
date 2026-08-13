@@ -1,0 +1,50 @@
+{
+  "name": "dsh-memory",
+  "version": "0.1.0",
+  "description": "DSH 跨会话长期记忆：L1 索引注入（存在性编码）+ 行动验证写入 + 分层管理（index/facts/sops）。借鉴 GenericAgent 记忆系统，不含自进化。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "SKILL.md",
+    "README.md",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugins",
+    "memory",
+    "long-term-memory",
+    "agent-skills"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/dsh-system-prompt": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-system-prompt": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "link:C:/Users/39795/.bun/install/global/node_modules/@deepseek-ai/schemastery",
+    "@deepseek-ai/dsh-tools": "link:C:/Users/39795/.bun/install/global/node_modules/@deepseek-ai/dsh-tools",
+    "@deepseek-ai/dsh-system-prompt": "link:C:/Users/39795/.bun/install/global/node_modules/@deepseek-ai/dsh-system-prompt"
+  }
+}
