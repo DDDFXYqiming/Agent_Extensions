@@ -1,7 +1,7 @@
 {
   "name": "dsh-vision-skill",
-  "version": "0.2.0",
-  "description": "DSH 标准插件版 vision skill：识别本地图片（vision_analyze/vision_ocr/vision_ground/vision_detect/vision_dominant_colors/vision_long_screenshot_ocr/vision_clipboard），默认 MiniMax-M3，思考关闭。零框架补丁。",
+  "version": "0.3.0",
+  "description": "DSH 标准插件版 vision skill：识别本地图片（vision_analyze/vision_ocr/vision_ground/vision_detect/vision_dominant_colors/vision_long_screenshot_ocr/vision_clipboard），任意 OpenAI 兼容多模态模型可接入（默认 MiniMax-M3），思考关闭。零框架补丁，Schemastery 配置校验。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -14,22 +14,29 @@
     "lib",
     "scripts",
     "templates",
+    "cordis.patch.yml",
     "SKILL.md",
     "README.md"
   ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "keywords": [
     "deepseek-harness",
     "dsh",
     "dsh-plugins",
     "vision",
     "ocr",
+    "grounding",
     "text-only-llm",
     "agent-skills"
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": "*",
-    "@deepseek-ai/dsh-credentials": "*"
+    "@deepseek-ai/dsh-credentials": "*",
+    "@deepseek-ai/dsh-tools": "*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-tools": {
@@ -38,5 +45,8 @@
     "@deepseek-ai/dsh-credentials": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "link:C:/Users/39795/.bun/install/global/node_modules/@deepseek-ai/schemastery"
   }
 }
