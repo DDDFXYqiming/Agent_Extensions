@@ -13,6 +13,7 @@
   "files": [
     "lib",
     "scripts",
+    "templates",
     "SKILL.md",
     "README.md"
   ],
