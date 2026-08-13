@@ -92,6 +92,20 @@ VISION_API_KEY: sk-xxxx
 - Python 3 + Pillow（`pip install pillow`；`vision.py --check` 自检）
 - 视觉模型 API Key（默认 MiniMax-M3；任意 OpenAI 兼容端点均可）
 
+## 图片怎么喂给插件（三种方式）
+
+插件的所有工具只接收**图片的本地路径（文本）**，不接收图片本体。三种喂图方式：
+
+| 方式 | 操作 | 适用环境 |
+|---|---|---|
+| ① 路径直发 | 图片已在本地（或放一份到工作区），对话框发路径文本："识别这张图 `E:\...\xxx.png`" | **所有环境** |
+| ② 剪贴板 | Win+Shift+S 截屏（图片自动进剪贴板）→ 对话框说"看图"，`vision_clipboard` 自动保存到工作区 `.dsh-vision/` 再识别 | **所有环境** |
+| ③ 直接贴图 | 输入框粘贴图片直接发送，框架补丁自动转为带路径的文本占位符 → 模型看到路径 → 自动调 `vision_analyze` | 仅限打了图片通道补丁的宿主 |
+
+**零补丁环境说明**：未打图片通道补丁时，直接贴图会被框架拒绝（`attachment-error` / `MODEL_DOES_NOT_SUPPORT_IMAGES`）——这是纯文本模型的能力门禁，不是插件问题（社区插件 [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit) 的 FAQ 同样要求用户"把文件放进工作区以路径形式使用"）。此时请用方式 ①/②，插件即可正常工作。
+
+> 方式 ③ 依赖的"图片通道补丁"是把粘贴的图片自动转换为带路径的文本占位符（`dsh-host-apiproxy` 门禁放行 + `dsh-llm-deepseek` 图片→路径转换）。**插件本身零框架补丁**，在任何 DSH 环境用方式 ①/② 均开箱即用。
+
 ## 使用示例
 
 ```
