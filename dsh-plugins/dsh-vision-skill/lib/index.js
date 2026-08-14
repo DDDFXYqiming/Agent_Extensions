@@ -830,7 +830,24 @@ function createToolDefinitions(ctx, cfg, sem) {
 				additionalProperties: false,
 				properties: {
 					text: { type: "string", required: true },
-					saved_path: { type: "string", required: true }
+					saved_path: { type: "string", required: true },
+					// [fix 2026-08-15] execute 返回 image_info（与 analyze/ocr 同构）：
+					// 漏声明会被 dsh-tools 输出校验拦截（additionalProperties:false），每次调用必失败。
+					image_info: {
+						type: "object",
+						additionalProperties: true,
+						properties: {
+							original: {
+								type: "object",
+								additionalProperties: true,
+								properties: {
+									width: { type: "integer" },
+									height: { type: "integer" }
+								}
+							},
+							resized: { type: "string" }
+						}
+					}
 				}
 			},
 			render: (_args, value) => [{ type: "text", text: `${value.text}\n\n（图片已保存: ${value.saved_path}）` }]
@@ -907,8 +924,8 @@ async function apply(ctx, config = {}) {
 		}
 	};
 
-	// [spec-audit 2026-08-14] agents 为可选服务（inject 已移除）：ctx.get() 查询，
-	// 缺失时退化为全局注册（与代码意图一致，死分支消除）
+	// [spec-audit 2026-08-15] agents 已由 inject 声明（L28，必选）：可选依赖模式在本版本
+	// cordis 不成立（ctx.get 只查已注入服务），此处 ctx.get 恒有值；progressive=false 时走下方全局注册。
 	const agents = ctx.get("agents");
 	const progressive = cfg.progressive && Boolean(agents);
 

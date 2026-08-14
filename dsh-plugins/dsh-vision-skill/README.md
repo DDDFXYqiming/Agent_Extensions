@@ -38,7 +38,7 @@ dsh-vision-skill/
 ├── scripts/vision.py     # 识图脚本（动态分辨率 / OCR / grounding / 主色 / 长图分块）
 ├── scripts/reapply-pi-ai-vision-patch.ps1  # pi-ai 适配器「图片→路径」幂等补丁脚本（dsh 升级后重跑）
 ├── SKILL.md              # 运行时 skill 内容（模型按需加载）
-├── package.json          # 插件包声明（peerDependencies: dsh-tools / dsh-credentials）
+├── package.json          # 插件包声明（peerDependencies: dsh-tools / dsh-credentials / schemastery）
 └── templates/.env.example # 脚本独立运行时的配置模板
 ```
 
@@ -95,7 +95,7 @@ VISION_API_KEY: sk-xxxx
 
 ## 依赖
 
-- Node.js + DSH（`@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-credentials`）
+- Node.js + DSH（`@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-credentials`、`@deepseek-ai/schemastery`）
 - Python 3 + Pillow（`pip install pillow`；`vision.py --check` 自检）
 - 视觉模型 API Key（**任意 OpenAI 兼容的多模态模型**：Qwen-VL / MiniMax-M3 / Gemini / GPT-4o 等，默认 MiniMax-M3）
 
