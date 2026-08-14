@@ -245,7 +245,8 @@ function bumpAccess(memDir, key) {
 	} catch { /* 热度统计失败不影响主流程 */ }
 }
 
-async function apply(ctx, config = {}) {
+// [fix 2026-08-15] apply 体内无 await，去掉 async：同步返回 disposer，cordis runner.collect 直接收集
+function apply(ctx, config = {}) {
 	const cfg = {
 		memoryDir: config.memoryDir || defaultMemDir(),
 		maxIndexLines: config.maxIndexLines ?? 30,
