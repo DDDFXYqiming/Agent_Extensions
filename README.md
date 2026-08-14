@@ -6,8 +6,6 @@
 
 本仓库收集、翻译并**自包含封装** AI Agent 相关的技能资源，并面向 **DeepSeek Harness（DSH）** 提供标准插件形式的扩展。所有内容均为**自包含**（技能/插件内自带脚本、模板与文档，不依赖仓库外文件），克隆即可用。
 
-> **来源说明**：`dsh-plugins/` 除 `dsh-annotation-patched`（fork 自 [omdsh-dev/dsh-annotation](https://github.com/omdsh-dev/dsh-annotation)）与 `dsh-side-panel-patched`（fork 自 [ccq1/dsh-side-panel](https://github.com/ccq1/dsh-side-panel)）外均为本仓库原创；`General_skills/` 与 `hermes_plugins/` 为收集、翻译并自包含封装的社区开源技能/插件（作者已在各 `SKILL.md`/`plugin.yaml` 中标注），全部按 MIT 许可分发。
-
 ## ✨ 内容总览
 
 ### 1️⃣ DSH 原生插件（dsh-plugins）—— 零框架补丁
