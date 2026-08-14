@@ -4,23 +4,23 @@
 // 步骤）：纯 DOM 自渲染，无任何 @deepseek-ai 值导入（bundle purity gate 合规）；
 // cordis 服务经 exports.inject 的字符串名接入（sessions / conversation）。
 //
-// v1.3.x · 自包含批注流（取代 v0.9 chip 设计与 v1.0 发送面板）：
-//   1. 选中助手文字 → 工具条「批注」→ 写批注（可留空 = 仅标记原文）
+// v1.3.x · 自包含引用流（取代 v0.9 chip 设计与 v1.0 发送面板）：
+//   1. 选中助手文字 → 工具条「引用」→ 写引用（可留空 = 仅标记原文）
 //   2. 保存后原文亮蓝编号 + 高亮（纯视觉，不弹窗）；跨消息/跨回合连续累积
-//   3. 输入框旁「批注 ×N」标签：悬浮可见全部内容、可逐条删除
+//   3. 输入框旁「引用 ×N」标签：悬浮可见全部内容、可逐条删除
 //   4. 回车发送：capture 阶段拦截 Enter（IME 守卫对齐官方 InputBar：isComposing /
-//      keyCode 229 + compositionend 后短延迟 latch）→ 批注块 prepend 进草稿
+//      keyCode 229 + compositionend 后短延迟 latch）→ 引用块 prepend 进草稿
 //      （setDraft，不覆盖用户文字）→ composer 正常提交
-//   5. 用户气泡不显示批注块：MutationObserver 微任务阶段（绘制前）按最后一个
-//      「提问：」切掉批注块、贴「批注 ×N」标签（hover 可见）；1s 轮询兜底 +
+//   5. 用户气泡不显示引用块：MutationObserver 微任务阶段（绘制前）按最后一个
+//      「提问：」切掉引用块、贴「引用 ×N」标签（hover 可见）；1s 轮询兜底 +
 //      历史消息自动修复（用户气泡是 MessageText 单文本节点，非 markdown）
-//   6. 回复逐条对照：批注块末尾注入格式指令，模型按「Annotation N：…」逐条
+//   6. 回复逐条对照：引用块末尾注入格式指令，模型按「Annotation N：…」逐条
 //      回应；回复渲染完成（data-streaming 移除）后把「Annotation N：」替换为
 //      可悬浮芯片（数据取最近一条带标签用户消息的 tag.__annotationItems，刷新
 //      自动重建；改 DOM 前先快照 TreeWalker 收集的文本节点再逐个替换，遍历
 //      中途 replaceChild 会让 walker 指针失效）
 //
-// 消息格式：我批注了以下 N 处内容…\n\n1. 原文\n   批注：…\n\n
+// 消息格式：我引用了以下 N 处内容…\n\n1. 原文\n   引用：…\n\n
 //           请用「Annotation 1：…」…\n\n提问：
 // （分隔标记用「提问：」而非「问题：」——标题行「回答我的问题：」里也含它，
 //   气泡隐藏手术会误命中）
@@ -183,7 +183,7 @@ window.__ModuleLoader__.load({
     }
 
     /** 全部消息行（用户 + 助手 + 其它节点）：新版走 data-chat-flow-kind，
-     *  旧版回退 data-time-hover-root。用于气泡装饰、批注条目回溯。 */
+     *  旧版回退 data-time-hover-root。用于气泡装饰、引用条目回溯。 */
     function allMessageRows() {
       var modern = document.querySelectorAll('[data-chat-flow-kind]')
       if (modern.length > 0) return Array.prototype.slice.call(modern)
@@ -255,7 +255,7 @@ window.__ModuleLoader__.load({
       return spans.length > 0 ? spans[0] : null
     }
 
-    /** 批注芯片差异变体：选区文本里芯片是「Annotation N」（无冒号），而消息行
+    /** 引用芯片差异变体：选区文本里芯片是「Annotation N」（无冒号），而消息行
      *  渲染文本可能是「Annotation N：」（React 重渲染后冒号恢复）——匹配失败时
      *  用变体重试，抹平该差异。 */
     function quoteVariants(quote) {
@@ -388,7 +388,7 @@ window.__ModuleLoader__.load({
       return null
     }
 
-    /** 定位批注的 Range：消息 seq 锚定优先，空白不敏感重搜兜底。 */
+    /** 定位引用的 Range：消息 seq 锚定优先，空白不敏感重搜兜底。 */
     function locateQuote(quote, saved) {
       if (saved !== undefined && saved !== null && saved.range && saved.range.startContainer) {
         try {
@@ -436,7 +436,7 @@ window.__ModuleLoader__.load({
               if (scIt > bestItScore) { bestItScore = scIt; bestIt = rngIt }
             }
             if (bestIt !== null && (saved.ctxBefore === '' || bestItScore > 0)) return bestIt
-            // 锚点消息还在但原文匹配不上：先试批注芯片差异变体（「Annotation N」
+            // 锚点消息还在但原文匹配不上：先试引用芯片差异变体（「Annotation N」
             // vs「Annotation N：」）在**同一条消息内**宽松重定位——绝不跨消息
             // 模糊搜索（那是「跳到旧轮次」的根源，v1.3.6 纪律）。
             var variants = quoteVariants(quote)
@@ -590,7 +590,7 @@ window.__ModuleLoader__.load({
 
       var ui = {
         mode: 'closed',      // closed | actions | editing | composing
-        editingId: null,     // 非空 = 正在编辑该 id 的已有批注（点角标进入）
+        editingId: null,     // 非空 = 正在编辑该 id 的已有引用（点角标进入）
         quote: '',
         quotes: [],          // [{ id, text, note, range, seqKey, rowHead, textOffset, ctxBefore, ctxAfter }]
         noteDraft: '',
@@ -795,9 +795,9 @@ window.__ModuleLoader__.load({
       var observer = new MutationObserver(function (mutations) {
         if (!mutationRelevant(mutations)) return
         onLayoutChange()
-        // 消息行插入/内容填充的瞬间同步执行气泡装饰（隐藏批注块 + 贴标签）：
+        // 消息行插入/内容填充的瞬间同步执行气泡装饰（隐藏引用块 + 贴标签）：
         // MutationObserver 回调在微任务阶段运行，早于浏览器绘制，
-        // 用户看不到「先显示批注块再隐藏」的闪烁。
+        // 用户看不到「先显示引用块再隐藏」的闪烁。
         decorateAll()
       })
       observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true })
@@ -807,9 +807,9 @@ window.__ModuleLoader__.load({
           if (ui.mode !== 'closed') closeToolbar()
           return
         }
-        // 【回车随输入框发送】在 composer 里按 Enter（且已收集批注、非输入法合成）：
-        // 提交前一刻把批注块拼进草稿，composer 自己的 Enter 提交继续——模型收到
-        // 批注清单 + 用户输入的问题。用户始终看不到文本被塞进去。
+        // 【回车随输入框发送】在 composer 里按 Enter（且已收集引用、非输入法合成）：
+        // 提交前一刻把引用块拼进草稿，composer 自己的 Enter 提交继续——模型收到
+        // 引用清单 + 用户输入的问题。用户始终看不到文本被塞进去。
         // IME 铁律（v1.3.10 修了 nativeEvent.keyCode；v1.3.11 补 compositionend
         // 后 Enter keyCode=13 的时序洞）：合成期 / 上屏确认 Enter 绝不能 setDraft。
         if (e.key === 'Enter' && ui.quotes.length > 0 && !isImeKeyBlocked(e)) {
@@ -855,19 +855,13 @@ window.__ModuleLoader__.load({
           bar.style.left = ui.pos.left + 'px'
           bar.style.top = ui.pos.top + 'px'
           var already = ui.quotes.some(function (q) { return q.text === ui.quote })
-          // PATCH(2026-08-14): Codex 式「引用」按钮——一键把选中文字入清单为
-          // 纯引用（空批注），显式确认制，杜绝"复制/阅读选中"导致的幽灵引用。
-          bar.appendChild(ghostButton(
-            already ? null : ICONS.plus,
-            already ? '已引用' : '引用',
-            already ? '这段内容已在批注清单中' : '将选中的内容作为引用随消息发送（无需写批注）',
-            already,
-            quickQuote,
-          ))
+          // PATCH(2026-08-14c): 移除「引用」按钮——空引用（不写内容直接保存）
+          // 已由「引用」按钮承担（saveAnnotation 支持 note=''），引用按钮是
+          // 临时方案，竞态修复后不再需要。
           bar.appendChild(ghostButton(
             null,
-            '批注',
-            '为选中的内容写一条批注',
+            '引用',
+            '为选中的内容写一条引用（可留空 = 仅引用原文）',
             already,
             enterEditing,
           ))
@@ -883,7 +877,7 @@ window.__ModuleLoader__.load({
           head.className = 'dsh-ann-card-head'
           var title = document.createElement('div')
           title.className = 'dsh-ann-card-title'
-          title.textContent = ui.editingId !== null ? '编辑批注' : '添加批注'
+          title.textContent = ui.editingId !== null ? '编辑引用' : '添加引用'
           head.appendChild(title)
           head.appendChild(iconButton('dsh-ann-icon', ICONS.close, '取消', closeToolbar))
           card.appendChild(head)
@@ -894,7 +888,7 @@ window.__ModuleLoader__.load({
           card.appendChild(quote)
           var ta = document.createElement('textarea')
           ta.className = 'dsh-ann-input'
-          ta.placeholder = '写下批注…（可留空，保存后仅标记原文）'
+          ta.placeholder = '写下引用…（可留空，保存后仅标记原文）'
           ta.value = ui.noteDraft
           ta.spellcheck = false
           ta.addEventListener('input', function () { ui.noteDraft = ta.value })
@@ -913,7 +907,7 @@ window.__ModuleLoader__.load({
           save.type = 'button'
           save.className = 'dsh-ann-action'
           save.appendChild(ICONS.check())
-          save.appendChild(document.createTextNode('保存批注'))
+          save.appendChild(document.createTextNode('保存引用'))
           save.addEventListener('click', saveAnnotation)
           row.appendChild(cancel)
           row.appendChild(save)
@@ -937,7 +931,7 @@ window.__ModuleLoader__.load({
         }
       }
 
-      // ---------- 批注标记 ----------
+      // ---------- 引用标记 ----------
       var markersSig = null
       function markersSignature() {
         var parts = []
@@ -1040,7 +1034,7 @@ window.__ModuleLoader__.load({
           var live = sel.getRangeAt(0)
           var liveText = live.toString()
           // 选区文本与 settle 快照一致才持有 live range；不一致（选区微变、DOM
-          // 被批注芯片等装饰改写）时也绝不返回全空锚——尽力抓行级锚点
+          // 被引用芯片等装饰改写）时也绝不返回全空锚——尽力抓行级锚点
           // （seqKey/rowHead），让 locateQuote 在锚点消息内宽松重定位。
           var textMatch = liveText.trim() === text
             || liveText.trim().replace(/\s+/g, ' ') === text.replace(/\s+/g, ' ')
@@ -1072,32 +1066,6 @@ window.__ModuleLoader__.load({
         return anchor
       }
 
-      /** PATCH(2026-08-14): Codex 式「引用」——选中文字一键入清单为纯引用（空批注），
-       *  随后回车随消息发送。显式确认制：复制/阅读选中等误选中不会自动成为引用。 */
-      function quickQuote() {
-        var text = ui.quote
-        if (text === '') { ui.error = '没有选中的内容'; render(); return }
-        if (ui.quotes.some(function (q) { return q.text === text })) return
-        var a = captureAnchor(text)
-        ui.quotes.push({
-          id: 'q-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
-          text: text,
-          note: '',
-          range: a.range,
-          seqKey: a.seqKey,
-          rowHead: a.rowHead,
-          textOffset: a.textOffset,
-          ctxBefore: a.ctxBefore,
-          ctxAfter: a.ctxAfter,
-        })
-        ui.pendingAnchor = null
-        closeToolbar()
-        updateChip()
-        renderMarkers()
-        focusComposer()
-        console.log('[annotation] 已引用（空批注）：' + text.slice(0, 40) + '…')
-      }
-
       function enterEditing() {
         ui.mode = 'editing'
         ui.noteDraft = ''
@@ -1107,7 +1075,7 @@ window.__ModuleLoader__.load({
         render()
       }
 
-      /** 点击角标数字 → 重新打开该批注的编辑面板（预填批注内容，可修改后保存）。 */
+      /** 点击角标数字 → 重新打开该引用的编辑面板（预填引用内容，可修改后保存）。 */
       function openEditorFor(q) {
         ui.mode = 'editing'
         ui.quote = q.text
@@ -1123,22 +1091,44 @@ window.__ModuleLoader__.load({
         render()
       }
 
-      /** 组装批注块（编号 + 原文 + 批注，结尾带唯一的「提问：」分隔标记——
+      /** 组装引用块（编号 + 原文 + 引用，结尾带唯一的「提问：」分隔标记——
        *  不用「问题：」是因为标题行「回答我的问题：」里也含它，气泡隐藏手术会误命中）。 */
       function buildBlock() {
         var parts = ui.quotes.map(function (q, i) {
           var s = (i + 1) + '. ' + q.text.replace(/\n/g, '\n   ')
           if (q.note !== undefined && q.note.trim() !== '') {
-            s += '\n   批注：' + q.note.replace(/\n/g, '\n    ')
+            s += '\n   引用：' + q.note.replace(/\n/g, '\n    ')
           }
           return s
         })
-        return '我批注了以下 ' + ui.quotes.length + ' 处内容（编号与原文对应），请针对它们回答我的问题：\n\n'
+        return '我引用了以下 ' + ui.quotes.length + ' 处内容（编号与原文对应），请针对它们回答我的问题：\n\n'
           + parts.join('\n\n')
-          + '\n\n请用「Annotation 1：…」到「Annotation ' + ui.quotes.length + '：…」的格式，逐条回应上面每一条批注，最后再回答我的问题。\n\n提问：'
+          + '\n\n请用「Annotation 1：…」到「Annotation ' + ui.quotes.length + '：…」的格式，逐条回应上面每一条引用，最后再回答我的问题。\n\n提问：'
       }
 
-      /** 提交前把批注块拼进 composer 草稿（随回车一起发送）。 */
+      /** 从草稿中剥离已残留的旧引用块（"我引用了以下…提问："整块），
+       *  保留用户自己的输入。残留来源：上次 setDraft 后 composer 提交
+       *  失败/未触发（IME 合成、焦点转移、React 状态未刷新等），block
+       *  留在草稿里而 quotes 已清——若不清除，旧块会随下一条消息重复发出，
+       *  且 attachAndSend 的旧守卫会因草稿含"我引用了以下"而拒绝拼新块。
+       *  PATCH(2026-08-14c): 竞态修复——剥离替代 return。 */
+      function stripOldBlock(draft) {
+        if (draft.indexOf('我引用了以下') === -1) return draft
+        // block 格式固定：以「我引用了以下」开头、以「\n\n提问：」收尾（buildBlock）。
+        // 非贪婪匹配到第一个「\n\n提问：」（block 拼在草稿最前，用户输入在其后，
+        // 用户输入里即使含「提问：」也不会误切——第一个标记必属 block 结尾）。
+        // 全局替换：连续失败可能残留多个 block，一次剥净。
+        // 前导 \n* 吃掉 block 前的分隔换行（多个残留时）；尾部 (?:\n+)? 吃掉
+        // block 与用户输入之间的拼接换行，剥离后不留空行。
+        return draft.replace(/\n*我引用了以下[\s\S]*?\n\n提问：(?:\n+)?/g, '')
+      }
+
+      /** 提交前把引用块拼进 composer 草稿（随回车一起发送）。
+       *  PATCH(2026-08-14c): 不再"拼稿即清"——quotes 清理只认「发送确认」
+       *  （watchInputDraft 的草稿从有→空 / decorateAll 的气泡出现），
+       *  消除提前清空导致的引用丢失（现象 A）与残留块重复伴随（现象 B）。
+       *  残留草稿用 stripOldBlock 剥离后拼入新块，旧守卫（草稿含 block 即
+       *  return）删除，否则残留会让后续引用永远拼不进去。 */
       function attachAndSend() {
         var current = sessions.list.getSnapshot().current
         if (current === undefined) return
@@ -1148,26 +1138,18 @@ window.__ModuleLoader__.load({
           var shell = ctx.conversation.input.for(scoped)
           var st = shell.state.getSnapshot()
           var draft = st.draft || ''
-          // 草稿已含批注块（上次追加未发送）→ 不重复追加。
-          if (draft.indexOf('我批注了以下') !== -1) return
+          var clean = stripOldBlock(draft)
           var block = buildBlock()
           var sentCount = ui.quotes.length
-          shell.setDraft(block + '\n' + draft)
-          // PATCH(2026-08-14): 拼稿即清——不依赖装饰扫描清 quotes（原版唯一清理路径
-          // 在 decorateAll 轮询，存在竞态：气泡未渲染/标记缺失/快速连发时残留，
-          // 导致"没选中也附带旧批注"的幽灵引用）。草稿中的批注块即已交付的引用，
-          // 防重复拼稿由 draft.indexOf('我批注了以下') 兜底。
-          ui.quotes = []
-          updateChip()
-          renderMarkers()
-          console.log('[annotation] 批注块已拼入草稿，回车将随消息发送（' + sentCount + ' 条）')
+          shell.setDraft(block + (clean === '' ? '' : '\n' + clean))
+          console.log('[annotation] 引用块已拼入草稿，回车将随消息发送（' + sentCount + ' 条）')
         } catch (err) {
-          console.warn('[annotation] 批注拼稿失败：', err)
-          showToast('批注拼稿失败，消息将不带批注发送：' + (err && err.message ? err.message : err))
+          console.warn('[annotation] 引用拼稿失败：', err)
+          showToast('引用拼稿失败，消息将不带引用发送：' + (err && err.message ? err.message : err))
         }
       }
 
-      // 批注保存/删除完成后把焦点还给 composer 输入框（光标在末尾），
+      // 引用保存/删除完成后把焦点还给 composer 输入框（光标在末尾），
       // 用户可直接回车发送，无需再点一下输入框。
       // preventScroll：长会话中选中文字时输入框可能在视口外，默认 focus
       // 会强制滚动页面（视觉上"卡一下"）；延迟一帧让卡片关闭动画先完成，
@@ -1186,7 +1168,7 @@ window.__ModuleLoader__.load({
         var text = ui.quote
         if (text === '') { ui.error = '没有选中的内容'; render(); return }
         var note = ui.noteDraft.trim()
-        // 编辑已有批注（点击角标进入）：按 id 更新批注内容。
+        // 编辑已有引用（点击角标进入）：按 id 更新引用内容。
         if (ui.editingId !== null) {
           for (var ei = 0; ei < ui.quotes.length; ei++) {
             if (ui.quotes[ei].id === ui.editingId) {
@@ -1247,7 +1229,7 @@ window.__ModuleLoader__.load({
         render()
       }
 
-      // ---------- 输入框旁的批注标签（N 条批注 · 悬浮看全部内容） ----------
+      // ---------- 输入框旁的引用标签（N 条引用 · 悬浮看全部内容） ----------
       var chipLayer = document.createElement('div')
       chipLayer.setAttribute('data-annotation-chip', '')
       chipLayer.style.cssText = 'position:fixed;z-index:1150;display:none;align-items:center;gap:4px;height:22px;padding:0 10px;border-radius:11px;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu,#2c2c2e);box-shadow:var(--dsw-shadow-lv3);font-family:var(--dsw-font-family,system-ui);font-size:11px;color:var(--dsw-alias-label-primary);cursor:default;animation:dsh-ann-pop .12s var(--ds-ease-in-out, ease);'
@@ -1267,7 +1249,7 @@ window.__ModuleLoader__.load({
         b.style.cssText = 'color:var(--dsw-alias-text-accent,#4c9aff);font-weight:700;'
         b.textContent = String(ui.quotes.length)
         chipLayer.appendChild(b)
-        chipLayer.appendChild(document.createTextNode('条批注'))
+        chipLayer.appendChild(document.createTextNode('条引用'))
         var card = document.querySelector('[data-composer-card]')
         if (card === null) { chipLayer.style.display = 'none'; return }
         var r = card.getBoundingClientRect()
@@ -1304,7 +1286,7 @@ window.__ModuleLoader__.load({
         el.style.cssText = 'position:fixed;z-index:1160;width:300px;max-width:calc(100vw - 16px);padding:10px 12px;border-radius:12px;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu,#2c2c2e);box-shadow:var(--dsw-shadow-lv3);font-family:var(--dsw-font-family,system-ui);font-size:12px;color:var(--dsw-alias-label-primary);'
         var head = document.createElement('div')
         head.style.cssText = 'font-weight:600;margin-bottom:6px;'
-        head.textContent = '批注（' + ui.quotes.length + ' 条）'
+        head.textContent = '引用（' + ui.quotes.length + ' 条）'
         el.appendChild(head)
         for (var i = 0; i < ui.quotes.length; i++) {
           var q = ui.quotes[i]
@@ -1321,7 +1303,7 @@ window.__ModuleLoader__.load({
           if (q.note !== undefined && q.note.trim() !== '') {
             var note = document.createElement('div')
             note.style.cssText = 'font-size:11px;color:var(--dsw-alias-label-secondary);margin:2px 0 0 22px;word-break:break-word;'
-            note.textContent = '批注：' + truncate(q.note, 60)
+            note.textContent = '引用：' + truncate(q.note, 60)
             item.appendChild(note)
           }
           var del = document.createElement('button')
@@ -1349,7 +1331,7 @@ window.__ModuleLoader__.load({
         el.style.width = w2 + 'px'
       }
 
-      // ---------- 发送完成监听（草稿从有内容变空 → 清空批注集） ----------
+      // ---------- 发送完成监听（草稿从有内容变空 → 清空引用集） ----------
       var inputUnsub = null
       function watchInputDraft() {
         if (typeof inputUnsub === 'function') { inputUnsub(); inputUnsub = null }
@@ -1366,7 +1348,7 @@ window.__ModuleLoader__.load({
             hadDraft = d !== ''
             if (ui.quotes.length === 0) return
             // 发送完成：草稿从有内容变空 → 脚标消失、编号下次从 1 开始；
-            // 同时在刚发出的用户消息气泡上贴「N 条批注」标签。
+            // 同时在刚发出的用户消息气泡上贴「N 条引用」标签。
             if (wasHad && d === '') {
               var sentItems = ui.quotes.map(function (q) {
                 return { text: q.text, note: q.note || '' }
@@ -1382,10 +1364,10 @@ window.__ModuleLoader__.load({
         } catch (_) { inputUnsub = null }
       }
 
-      /** 把批注块文本从用户消息气泡里藏掉（模型消息内容不受影响）：
+      /** 把引用块文本从用户消息气泡里藏掉（模型消息内容不受影响）：
        *  用户气泡是纯文本渲染（MessageText，单个文本节点），
        *  找到最后一个「\n提问：」（老格式回退「\n问题：」），
-       *  保留其后的用户问题，整块批注文本从 DOM 移除。
+       *  保留其后的用户问题，整块引用文本从 DOM 移除。
        *  返回是否成功（内容未渲染完时返回 false，轮询稍后重试）。 */
       function hideAnnotationBlock(row) {
         try {
@@ -1439,7 +1421,7 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** 从气泡文本反解析批注条目（用于刷新后旧消息的 hover 内容）。 */
+      /** 从气泡文本反解析引用条目（用于刷新后旧消息的 hover 内容）。 */
       function parseItemsFromBubble(row) {
         try {
           var b = row.querySelector('[class*="bubble"]')
@@ -1456,7 +1438,7 @@ window.__ModuleLoader__.load({
             if (mm === null) continue
             var item = mm[2]
             var note = ''
-            var nm = /\n   批注：([\s\S]*)$/.exec(item)
+            var nm = /\n   引用：([\s\S]*)$/.exec(item)
             if (nm !== null) { note = nm[1].trim(); item = item.slice(0, nm.index) }
             out.push({ text: item.replace(/\n   /g, '\n').trim(), note: note })
           }
@@ -1464,13 +1446,13 @@ window.__ModuleLoader__.load({
         } catch (_) { return [] }
       }
 
-      /** 在用户气泡上贴「批注 ×N」标签（hover 显示条目内容）。 */
+      /** 在用户气泡上贴「引用 ×N」标签（hover 显示条目内容）。 */
       function attachBubbleTag(row, items) {
         if (row.querySelector('[data-annotation-bubble-tag]') !== null) return
         var bubble = row.querySelector('[class*="bubble"]') || row
         var tag = document.createElement('span')
         tag.setAttribute('data-annotation-bubble-tag', '')
-        tag.textContent = '批注 ×' + items.length
+        tag.textContent = '引用 ×' + items.length
         tag.style.cssText = 'display:inline-flex;align-items:center;height:18px;padding:0 8px;margin:4px 0 0 4px;border-radius:9px;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu,#2c2c2e);color:var(--dsw-alias-label-secondary);font-family:var(--dsw-font-family,system-ui);font-size:10px;cursor:default;'
         ;(function (list) {
           tag.addEventListener('mouseenter', function () {
@@ -1480,7 +1462,7 @@ window.__ModuleLoader__.load({
             el.style.cssText = 'position:fixed;z-index:1160;width:300px;max-width:calc(100vw - 16px);padding:10px 12px;border-radius:12px;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu,#2c2c2e);box-shadow:var(--dsw-shadow-lv3);font-family:var(--dsw-font-family,system-ui);font-size:12px;color:var(--dsw-alias-label-primary);'
             var head = document.createElement('div')
             head.style.cssText = 'font-weight:600;margin-bottom:6px;'
-            head.textContent = '本消息携带批注（' + list.length + ' 条）'
+            head.textContent = '本消息携带引用（' + list.length + ' 条）'
             el.appendChild(head)
             for (var i = 0; i < list.length; i++) {
               var item = document.createElement('div')
@@ -1496,7 +1478,7 @@ window.__ModuleLoader__.load({
               if (list[i].note !== '') {
                 var note = document.createElement('div')
                 note.style.cssText = 'font-size:11px;color:var(--dsw-alias-label-secondary);margin:2px 0 0 22px;word-break:break-word;'
-                note.textContent = '批注：' + truncate(list[i].note, 60)
+                note.textContent = '引用：' + truncate(list[i].note, 60)
                 item.appendChild(note)
               }
               el.appendChild(item)
@@ -1529,15 +1511,15 @@ window.__ModuleLoader__.load({
         })(items)
         tag.__annotationItems = items
         bubble.appendChild(tag)
-        console.log('[annotation] 气泡已贴批注标签 ×' + items.length)
+        console.log('[annotation] 气泡已贴引用标签 ×' + items.length)
       }
 
-      /** 发送完成时暂存批注数据（供气泡 hover 面板使用）。 */
+      /** 发送完成时暂存引用数据（供气泡 hover 面板使用）。 */
       var pendingDeco = []
 
-      // ---------- 助手回复中的「Annotation N：」→ 悬浮批注芯片 ----------
+      // ---------- 助手回复中的「Annotation N：」→ 悬浮引用芯片 ----------
 
-      /** 找到该回复行之前最近一条携带批注标签的用户消息的条目数据。 */
+      /** 找到该回复行之前最近一条携带引用标签的用户消息的条目数据。 */
       function findPrevAnnotationItems(row) {
         var rows = allMessageRows()
         var idx = rows.indexOf(row)
@@ -1575,7 +1557,7 @@ window.__ModuleLoader__.load({
           if (items === null || items.length === 0) {
             // 拿不到条目数据也照样生成芯片（hover 显示占位），并一次性提示。
             items = []
-            markRowDiag(el, '未找到批注条目数据，芯片将显示占位内容（可继续用）')
+            markRowDiag(el, '未找到引用条目数据，芯片将显示占位内容（可继续用）')
           }
           decorateAnnotationLabels(el, items)
         }
@@ -1612,14 +1594,14 @@ window.__ModuleLoader__.load({
           n.parentNode.replaceChild(frag, n)
         }
         if (done > 0) {
-          console.log('[annotation] 回复批注芯片 ×' + done, row.querySelectorAll('[data-annotation-reply-chip]').length + ' 个元素')
+          console.log('[annotation] 回复引用芯片 ×' + done, row.querySelectorAll('[data-annotation-reply-chip]').length + ' 个元素')
         } else {
           // 行内含 Annotation 但一个都没匹配上 → 文本节点里没有完整「Annotation N：」模式
           markRowDiag(row, '行内含 Annotation 但未匹配到「Annotation N：」模式')
         }
       }
 
-      /** 构造「Annotation N」芯片（hover 显示该批注的原文与批注内容）。 */
+      /** 构造「Annotation N」芯片（hover 显示该引用的原文与引用内容）。 */
       function makeReplyChip(num, items) {
         var chip = document.createElement('span')
         chip.setAttribute('data-annotation-reply-chip', '')
@@ -1641,7 +1623,7 @@ window.__ModuleLoader__.load({
           el.style.cssText = 'position:fixed;z-index:1160;width:320px;max-width:calc(100vw - 16px);padding:10px 12px;border-radius:12px;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu,#2c2c2e);box-shadow:var(--dsw-shadow-lv3);font-family:var(--dsw-font-family,system-ui);font-size:12px;color:var(--dsw-alias-label-primary);'
           var head = document.createElement('div')
           head.style.cssText = 'font-weight:600;margin-bottom:6px;'
-          head.textContent = item !== undefined ? '批注 ' + num + ' 的原文' : '批注 ' + num
+          head.textContent = item !== undefined ? '引用 ' + num + ' 的原文' : '引用 ' + num
           el.appendChild(head)
           if (item !== undefined) {
             var quote = document.createElement('div')
@@ -1651,13 +1633,13 @@ window.__ModuleLoader__.load({
             if (item.note !== '') {
               var note = document.createElement('div')
               note.style.cssText = 'font-size:11px;color:var(--dsw-alias-text-accent,#4c9aff);margin-top:6px;word-break:break-word;'
-              note.textContent = '你的批注：' + truncate(item.note, 80)
+              note.textContent = '你的引用：' + truncate(item.note, 80)
               el.appendChild(note)
             }
           } else {
             var none = document.createElement('div')
             none.style.cssText = 'font-size:11px;color:var(--dsw-alias-label-tertiary);'
-            none.textContent = '（未找到对应批注条目）'
+            none.textContent = '（未找到对应引用条目）'
             el.appendChild(none)
           }
           tipLayer.appendChild(el)
@@ -1677,7 +1659,7 @@ window.__ModuleLoader__.load({
         return chip
       }
 
-      /** 全局轮询装饰：找所有「携带批注块但未装饰」的用户气泡 → 隐藏批注块 + 贴标签。
+      /** 全局轮询装饰：找所有「携带引用块但未装饰」的用户气泡 → 隐藏引用块 + 贴标签。
        *  不依赖发送事件链：异步渲染、刷新后的历史消息都能被覆盖。 */
       function decorateAll() {
         try {
@@ -1687,16 +1669,16 @@ window.__ModuleLoader__.load({
             if (el.hasAttribute('data-pending-steering')) continue
             if (el.querySelector('[data-annotation-bubble-tag]') !== null) continue
             var b = el.querySelector('[class*="bubble"]')
-            if (b === null || (b.textContent || '').indexOf('我批注了以下') === -1) continue
+            if (b === null || (b.textContent || '').indexOf('我引用了以下') === -1) continue
             // 最新一条优先消费发送时暂存的数据；其余从气泡文本反解析（须在隐藏前）。
             var items = null
             if (i === rows.length - 1 && pendingDeco.length > 0) items = pendingDeco.pop().items
             if (items === null || items.length === 0) items = parseItemsFromBubble(el)
             if (!hideAnnotationBlock(el)) continue // 内容未渲染完 → 留给下轮
             attachBubbleTag(el, items)
-            // 批注已随消息真实发出（用户气泡带着批注块出现）→ 清空待发送批注集。
+            // 引用已随消息真实发出（用户气泡带着引用块出现）→ 清空待发送引用集。
             // 兜底 watchInputDraft 在初始化时会话未加载时失效的场景：若不清空，
-            // 之后每次在 composer 按 Enter 都会把批注块重新注入草稿，且 setDraft
+            // 之后每次在 composer 按 Enter 都会把引用块重新注入草稿，且 setDraft
             // 可能打断输入法合成（中文上不了屏）。
             if (ui.quotes.length > 0) {
               ui.quotes = []
@@ -1704,7 +1686,7 @@ window.__ModuleLoader__.load({
               renderMarkers()
             }
           }
-          // 助手回复：把「Annotation N：」变为可悬浮的批注芯片（内容取自最近一条带批注的用户消息）。
+          // 助手回复：把「Annotation N：」变为可悬浮的引用芯片（内容取自最近一条带引用的用户消息）。
           decorateAssistantAnnotations()
         } catch (err) {
           console.warn('[annotation] 装饰扫描失败：', err)
@@ -1717,7 +1699,7 @@ window.__ModuleLoader__.load({
         if (decoTimer === null) decoTimer = setInterval(decorateAll, 1000)
       }
 
-      // ---------- 会话切换时收起浮窗并清空批注 ----------
+      // ---------- 会话切换时收起浮窗并清空引用 ----------
       var lastSessionId = sessions.list.getSnapshot().current
       var unsub = sessions.list.subscribe(function () {
         var cur = sessions.list.getSnapshot().current
