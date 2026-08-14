@@ -258,7 +258,7 @@ async function apply(ctx, config = {}) {
 	const agentStates = new Map();
 
 	// ── 记忆注入（L1 存在性索引每轮可见，缓存友好：快照追加式）──
-	// [spec-audit 2026-08-14] systemPrompt 为可选服务：ctx.get() 查询，缺失时跳过
+	// [spec-audit 2026-08-15] systemPrompt 已由 inject 声明（L32，必选）：ctx.get 恒有值。
 	const sysPrompt = ctx.get("systemPrompt");
 	if (sysPrompt) {
 		disposers.push(sysPrompt.context({
@@ -307,13 +307,15 @@ async function apply(ctx, config = {}) {
 	// ── 运行时 skill（触发语义见 SKILL.md）──
 	// [spec-audit 2026-08-14] 注册前剥离 frontmatter（provider 加载技能时会剥离，
 	// 运行时注册保持一致，避免模型看到重复的 name/description 元数据）
-	ctx.skills.register({
+	// [spec-audit 2026-08-15] 收集 skill disposer（与 vision-skill 一致；cordis 自动清理兜底）
+	const skillDisposer = ctx.skills.register({
 		name: "memory",
 		description: "跨会话长期记忆：读写经验 SOP 与环境事实。当任务涉及本机环境、工具配置、以前踩过的坑，或任务完成发现值得沉淀的验证经验时使用。",
 		whenToUse: "新任务开始时需要历史经验/环境事实；任务完成且存在行动验证成功、未来可复用的信息（写入）；记忆索引需要同步",
 		source: "runtime",
 		content: readFileSync(SKILL_MD, "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
 	});
+	if (typeof skillDisposer === "function") disposers.push(skillDisposer);
 
 	// ── 工具定义 ──
 	const readTool = defineTool({
@@ -559,8 +561,8 @@ async function apply(ctx, config = {}) {
 		}
 	};
 
-	// [spec-audit 2026-08-14] agents 为可选服务（inject 已移除）：ctx.get() 查询，
-	// 缺失时退化为全局注册（与代码意图一致，死分支消除）
+	// [spec-audit 2026-08-15] agents 已由 inject 声明（L32，必选）：可选依赖模式在本版本
+	// cordis 不成立（ctx.get 只查已注入服务），此处 ctx.get 恒有值；progressive=false 时走下方全局注册。
 	const agents = ctx.get("agents");
 	const progressive = cfg.progressive && Boolean(agents);
 	if (progressive) {
