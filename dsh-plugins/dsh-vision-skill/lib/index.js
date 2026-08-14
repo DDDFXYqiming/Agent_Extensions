@@ -22,9 +22,10 @@ import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import Schema from "@deepseek-ai/schemastery";
 
 const name = "vision-skill";
-// [spec-audit 2026-08-14] credentials/agents 改为可选依赖：不声明 inject，
-// apply 内用 ctx.get() 按需查询（framework/service.md：可选=省略 inject 用 ctx.get）
-const inject = ["skills", "tools"];
+// [spec-audit 2026-08-14 修订] credentials/agents 必须声明 inject：
+// 实测 cordis ctx.get() 只查插件隔离层已登记的服务（未 inject 恒返回 undefined，
+// 导致 VISION_API_KEY 解析失败），可选依赖模式在本版本 cordis 不成立。
+const inject = ["skills", "tools", "credentials", "agents"];
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
 const SKILL_MD = join(PLUGIN_DIR, "..", "SKILL.md");
