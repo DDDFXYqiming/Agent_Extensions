@@ -6,7 +6,7 @@
 
 本仓库收集、翻译并**自包含封装** AI Agent 相关的技能资源，并面向 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) 提供标准插件形式的扩展。所有内容均为**自包含**（技能/插件内自带脚本、模板与文档，不依赖仓库外文件），克隆即可用。
 
-> **来源说明**：`dsh-plugins/` 除 `dsh-annotation-patched`（fork 自 [omdsh-dev/dsh-annotation](https://github.com/omdsh-dev/dsh-annotation)）外均为本仓库原创；`General_skills/` 与 `hermes_plugins/` 为收集、翻译并自包含封装的社区开源技能/插件（作者已在各 `SKILL.md`/`plugin.yaml` 中标注），全部按 MIT 许可分发。
+> **来源说明**：`dsh-plugins/` 除 `dsh-annotation-patched`（fork 自 [omdsh-dev/dsh-annotation](https://github.com/omdsh-dev/dsh-annotation)）与 `dsh-side-panel-patched`（fork 自 [ccq1/dsh-side-panel](https://github.com/ccq1/dsh-side-panel)）外均为本仓库原创；`General_skills/` 与 `hermes_plugins/` 为收集、翻译并自包含封装的社区开源技能/插件（作者已在各 `SKILL.md`/`plugin.yaml` 中标注），全部按 MIT 许可分发。
 
 ## ✨ 内容总览
 
@@ -33,6 +33,7 @@
 | `dsh-vision-skill` v2.1 | 识图插件：7 个工具 + 渐进式工具暴露 + Credential 化 + 路径围栏 | Node.js + DSH（`dsh-tools` / `dsh-credentials`）、Python 3 + Pillow、视觉模型 API Key |
 | `dsh-memory` | 跨会话长期记忆：L1 索引注入（每轮实时、KV 缓存友好）+ L2 环境事实 + L3 任务经验，行动验证写入 | Node.js + DSH（`dsh-tools`） |
 | `dsh-annotation-patched` | 选中批注/引用插件（fork 增强）：选中助手回复文字 → 批注（可空）或一键「引用」→ 回车随消息发送，回复按 `Annotation N` 逐条对照；增强：Codex 式「引用」按钮（显式确认制）+ 幽灵引用修复 | Node.js + DSH（纯浏览器端 bundle，零 Node 逻辑） |
+| `dsh-side-panel-patched` | 右侧工作区面板（fork 增强）：文件树/预览/编辑（CodeMirror）+ Git 审查 + 终端；增强：绕开官方 520px 宽度上限（420~60% 视口自由拖宽）、头部与官方 header 像素级对齐、Codex 风格梭形拖拽把手、Windows 终端防崩溃 | Node.js + DSH（文件/Git/终端 API + 浏览器 bundle） |
 
 ### 3️⃣ Hermes 插件（hermes_plugins）
 
@@ -53,7 +54,8 @@ Agent_Extensions/
 ├── dsh-plugins/               # DeepSeek Harness（DSH）原生插件
 │   ├── dsh-vision-skill/      # 识图插件 v2.1（7 工具 + 渐进式暴露 + Credential 化）
 │   ├── dsh-memory/            # 跨会话分层长期记忆
-│   └── dsh-annotation-patched/ # 选中批注/引用插件（fork 增强，Codex 式选中即引用）
+│   ├── dsh-annotation-patched/ # 选中批注/引用插件（fork 增强，Codex 式选中即引用）
+│   └── dsh-side-panel-patched/ # 右侧工作区面板（fork 增强，绕开 520 上限 + 对齐 + 梭形把手）
 ├── hermes_plugins/            # Hermes 框架插件
 │   └── language-router/       # 语言路由（planner-first）
 └── README.md
