@@ -49471,9 +49471,6 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 			filesView.className = "dfb-files dfb-view";
 			const fileToolbar = document.createElement("div");
 			fileToolbar.className = "dfb-file-toolbar";
-			const currentPath = document.createElement("div");
-			currentPath.className = "dfb-path";
-			currentPath.textContent = "当前工作区";
 			const refreshTree = document.createElement("button");
 			refreshTree.className = "dfb-tool";
 			refreshTree.type = "button";
@@ -49484,7 +49481,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 			toggleTree.type = "button";
 			toggleTree.textContent = "▤";
 			toggleTree.title = "收起/展开目录树";
-			fileToolbar.append(currentPath, refreshTree, toggleTree);
+			fileToolbar.append(refreshTree, toggleTree);
 			const preview = document.createElement("div");
 			preview.className = "dfb-preview";
 			preview.innerHTML = "<div class=\"dfb-empty\">从文件树选择文件</div>";
@@ -49814,9 +49811,23 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 				const cur = clientSessions.list.getSnapshot().current;
 				if (cur === lastSessionId) return;
 				lastSessionId = cur;
-				// PATCH(2026-08-14v6g): 不销毁文件 tab（tab 与会话绑定保留），仅重载树
-				selectKind("files");
-				// 强制树重载（新工作区根）
+				// PATCH(2026-08-14v6h): 文件 tab 按会话分组 —— 只显示当前工作区的 tab
+				for (const [id, ft] of fileTabs) {
+					const mine = ft.sessionId === cur;
+					ft.tabBtn.hidden = !mine;
+					if (!mine) {
+						ft.view.hidden = true;
+						ft.tabBtn.dataset.active = "false";
+					}
+				}
+				// 激活当前会话最近打开的文件 tab；否则显示文件视图（树）
+				const curTabs = [...fileTabs].filter(([, ft]) => ft.sessionId === cur);
+				if (curTabs.length > 0) {
+					activateFileTab(curTabs[curTabs.length - 1][0]);
+				} else {
+					showFilesView();
+				}
+				// 强制树重载（当前工作区根）
 				loadedSession = "";
 				if (cur !== void 0) load(cur, "", tree);
 			});
@@ -50049,6 +50060,21 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 				requestAnimationFrame(() => {
 					tree.scrollTop = st; // 双保险：下一帧布局稳定后再次恢复
 				});
+			};
+			// PATCH(2026-08-14v6h): 显示文件功能视图（树），但不复活「文件」功能 tab
+			const showFilesView = () => {
+				if (activeFileTab !== null) {
+					const prev = fileTabs.get(activeFileTab);
+					if (prev !== void 0) {
+						prev.view.hidden = true;
+						prev.tabBtn.dataset.active = "false";
+					}
+					activeFileTab = null;
+				}
+				activeKind = "files";
+				for (const [key, view] of views) view.hidden = key !== "files";
+				for (const [key, tab] of tabButtons) tab.dataset.active = "false";
+				moveTreeTo(body);
 			};
 			// PATCH(2026-08-14v6): 激活指定文件 tab（隐藏功能视图，显示目标文件）
 			const activateFileTab = (id) => {
