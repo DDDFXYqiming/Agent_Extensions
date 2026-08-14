@@ -941,6 +941,20 @@ window.__ModuleLoader__.load({
           save.addEventListener('click', saveAnnotation)
           row.appendChild(cancel)
           row.appendChild(save)
+          // PATCH(2026-08-14e): 编辑已有引用时提供「删除引用」（v2 加回）——删除入口
+          // 平时在「输入框旁标签 → 悬浮面板」里，编辑态直接删更顺手。
+          if (ui.editingId !== null) {
+            var del = document.createElement('button')
+            del.type = 'button'
+            del.className = 'dsh-ann-cancel'
+            del.style.cssText = 'color:#ff8a8a;border-color:rgba(255,107,107,.4);'
+            del.textContent = '删除引用'
+            del.addEventListener('click', function () {
+              removeQuote(ui.editingId)
+              closeToolbar()
+            })
+            row.appendChild(del)
+          }
           card.appendChild(row)
           if (ui.error !== null) {
             var err = document.createElement('div')
