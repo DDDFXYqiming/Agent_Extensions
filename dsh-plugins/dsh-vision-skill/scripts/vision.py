@@ -861,7 +861,9 @@ def main(argv=None):
         )
         print(result)
     except Exception as e:
-        print(f"识图失败: {e}")
+        # [spec-audit 2026-08-14] 诊断必须走 stderr：stdout 是结果通道，
+        # 错误打到 stdout 会被插件 run() 的 stderr 收集吞掉，只剩 "Command failed" 空壳
+        print(f"识图失败: {e}", file=sys.stderr)
         sys.exit(1)
 
 
