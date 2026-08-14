@@ -6,7 +6,7 @@
 
 本仓库收集、翻译并**自包含封装** AI Agent 相关的技能资源，并面向 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) 提供标准插件形式的扩展。所有内容均为**自包含**（技能/插件内自带脚本、模板与文档，不依赖仓库外文件），克隆即可用。
 
-> **来源说明**：`dsh-plugins/` 为本仓库原创；`General_skills/` 与 `hermes_plugins/` 为收集、翻译并自包含封装的社区开源技能/插件（作者已在各 `SKILL.md`/`plugin.yaml` 中标注），全部按 MIT 许可分发。
+> **来源说明**：`dsh-plugins/` 除 `dsh-annotation-patched`（fork 自 [omdsh-dev/dsh-annotation](https://github.com/omdsh-dev/dsh-annotation)）外均为本仓库原创；`General_skills/` 与 `hermes_plugins/` 为收集、翻译并自包含封装的社区开源技能/插件（作者已在各 `SKILL.md`/`plugin.yaml` 中标注），全部按 MIT 许可分发。
 
 ## ✨ 内容总览
 
@@ -32,6 +32,7 @@
 |---|---|---|
 | `dsh-vision-skill` v2.1 | 识图插件：7 个工具 + 渐进式工具暴露 + Credential 化 + 路径围栏 | Node.js + DSH（`dsh-tools` / `dsh-credentials`）、Python 3 + Pillow、视觉模型 API Key |
 | `dsh-memory` | 跨会话长期记忆：L1 索引注入（每轮实时、KV 缓存友好）+ L2 环境事实 + L3 任务经验，行动验证写入 | Node.js + DSH（`dsh-tools`） |
+| `dsh-annotation-patched` | 选中批注/引用插件（fork 增强）：选中助手回复文字 → 批注（可空）→ 回车随消息发送，回复按 `Annotation N` 逐条对照；增强：Codex 式选中即引用 + 幽灵引用修复 | Node.js + DSH（纯浏览器端 bundle，零 Node 逻辑） |
 
 ### 3️⃣ Hermes 插件（hermes_plugins）
 
@@ -51,7 +52,8 @@ Agent_Extensions/
 │   └── generic-agent-code-run/ # Windows 桌面/浏览器自动化
 ├── dsh-plugins/               # DeepSeek Harness（DSH）原生插件
 │   ├── dsh-vision-skill/      # 识图插件 v2.1（7 工具 + 渐进式暴露 + Credential 化）
-│   └── dsh-memory/            # 跨会话分层长期记忆
+│   ├── dsh-memory/            # 跨会话分层长期记忆
+│   └── dsh-annotation-patched/ # 选中批注/引用插件（fork 增强，Codex 式选中即引用）
 ├── hermes_plugins/            # Hermes 框架插件
 │   └── language-router/       # 语言路由（planner-first）
 └── README.md
@@ -129,6 +131,17 @@ VISION_API_KEY: sk-xxxx
 | `memory_index` | 重建 L1 索引自动段（保留 `[RULES]` 手动段） |
 
 核心公理：**行动验证**（No Execution, No Memory）、**神圣不可删改**（已验证事实可压缩迁移、严禁丢弃）、**禁易变状态**（时间戳/PID/临时路径不存）、**最小充分指针**（L1 只写存在性）。注入走 user-role 快照，**不破坏 DSH 的 KV 缓存命中率**（设计细节见插件 README）。
+
+### dsh-annotation-patched（选中批注/引用，fork 增强）
+
+| 能力 | 说明 |
+|---|---|
+| 选中批注 | 选中助手回复文字 → 批注（可留空）→ 回车随消息发送；自己的气泡不显示批注块（零闪烁隐藏） |
+| 逐条对照 | 模型按 `Annotation 1: …` 逐条回应，回复中为可悬停芯片（回看原文+批注） |
+| **Codex 式选中即引用**（增强①） | 选中文字后直接回车即自动附带引用，无需点「批注」保存；Esc 放弃快照 |
+| **幽灵引用修复**（增强②） | 拼稿即清待发送集（原版依赖装饰扫描轮询清理存在竞态残留） |
+
+来源：[omdsh-dev/dsh-annotation](https://github.com/omdsh-dev/dsh-annotation) v1.3.13（MIT），全部改动带 `PATCH(2026-08-14)` 标记，详见目录内 `README.md`。
 
 ## ⚙️ 环境要求
 
