@@ -941,20 +941,6 @@ window.__ModuleLoader__.load({
           save.addEventListener('click', saveAnnotation)
           row.appendChild(cancel)
           row.appendChild(save)
-          // PATCH(2026-08-14e): 编辑已有引用时提供「删除引用」——此前删除入口只在
-          // 输入框旁标签的悬浮面板里（hover 才可见），编辑态想删找不到入口。
-          if (ui.editingId !== null) {
-            var del = document.createElement('button')
-            del.type = 'button'
-            del.className = 'dsh-ann-cancel'
-            del.style.cssText = 'color:#ff8a8a;border-color:rgba(255,107,107,.4);'
-            del.textContent = '删除引用'
-            del.addEventListener('click', function () {
-              removeQuote(ui.editingId)
-              closeToolbar()
-            })
-            row.appendChild(del)
-          }
           card.appendChild(row)
           if (ui.error !== null) {
             var err = document.createElement('div')
@@ -1277,6 +1263,14 @@ window.__ModuleLoader__.load({
       function closeToolbar() {
         if (ui.mode === 'closed') return
         clearSettle()
+        // PATCH(2026-08-14e): 塌缩残留选区——编辑已有引用时（chip 打开的编辑卡），
+        // 原文本选区在保存后仍存在；若不塌缩，selectionchange 的 settle 会在关闭
+        // 后 ~250ms 重新弹出工具条，表现为「取消/右上角 X 不生效」（新建引用时点
+        // 「引用」按钮已塌缩选区，故无此问题）。
+        try {
+          var sel = window.getSelection()
+          if (sel !== null && !sel.isCollapsed) sel.removeAllRanges()
+        } catch (_) { /* 选区操作失败忽略 */ }
         ui.mode = 'closed'
         ui.error = null
         ui.busy = false
