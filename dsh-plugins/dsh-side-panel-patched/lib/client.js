@@ -49291,6 +49291,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 			}
 		}
 		function createPanel(ctx) {
+			console.log("[side-panel] v6-file-tabs bundle executing");
 			const style = document.createElement("style");
 			style.textContent = css + reviewCss + themeCss;
 			document.head.append(style);
@@ -49387,9 +49388,24 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 			const tabButtons = /* @__PURE__ */ new Map();
 			const openKinds = /* @__PURE__ */ new Set(["files"]);
 			let activeKind = "files";
+			// PATCH(2026-08-14v6): 文件 tab 栈 —— 支持同时打开多个文件（Codex 式）
+			const fileTabs = new Map();   // id -> { path, title, tabBtn, view, preview }
+			let fileTabSeq = 0;
+			let activeFileTab = null;
 			let scheduleFeatureLabel = () => {};
 			const selectKind = (kind) => {
 				openKinds.add(kind);
+				// PATCH(2026-08-14v6): 切换到功能视图时，文件 tab 全部失活
+				if (activeFileTab !== null) {
+					const prev = fileTabs.get(activeFileTab);
+					if (prev !== void 0) {
+						prev.view.hidden = true;
+						prev.tabBtn.dataset.active = "false";
+					}
+					activeFileTab = null;
+				}
+				// PATCH(2026-08-14v6b): 文件功能视图激活时，树单例移回 filesView（保持滚动）
+				if (kind === "files") moveTreeTo(body);
 				const selectedTab = tabButtons.get(kind);
 				if (selectedTab !== void 0) selectedTab.hidden = false;
 				activeKind = kind;
@@ -49792,6 +49808,18 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 			let loadedSession = "";
 			const clientSessions = ctx.sessions;
 			const currentSession = () => clientSessions.list.getSnapshot().current;
+			// PATCH(2026-08-14v6e): 会话切换跟踪 —— 切换工作区时重置右侧面板
+			let lastSessionId = clientSessions.list.getSnapshot().current;
+			const unsubSessions = clientSessions.list.subscribe(() => {
+				const cur = clientSessions.list.getSnapshot().current;
+				if (cur === lastSessionId) return;
+				lastSessionId = cur;
+				// PATCH(2026-08-14v6g): 不销毁文件 tab（tab 与会话绑定保留），仅重载树
+				selectKind("files");
+				// 强制树重载（新工作区根）
+				loadedSession = "";
+				if (cur !== void 0) load(cur, "", tree);
+			});
 			let reviewMode = "unstaged";
 			let reviewRequest = 0;
 			const refreshReview = async () => {
@@ -49928,9 +49956,15 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 			});
 			terminalResizeObserver.observe(terminal);
 			let expanded = false;
+			let preExpandWidth = 0;
 			expand.onclick = () => {
 				expanded = !expanded;
-				panelWidth = expanded && conversationRoot !== null ? Math.floor(conversationRoot.clientWidth * .75) : defaultWidth;
+				if (expanded) {
+					preExpandWidth = panelWidth; // PATCH(2026-08-14v5): 记住展开前宽度
+					panelWidth = Math.floor(window.innerWidth * 0.6); // 展开 = 60% 视口（v4 上限）
+				} else {
+					panelWidth = preExpandWidth || defaultWidth; // 恢复用户原宽度
+				}
 				syncGrid();
 				expand.dataset.active = String(expanded);
 			};
@@ -49971,24 +50005,9 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 						};
 						target.append(row, children);
 					} else {
-						row.onclick = async () => {
-							currentPath.textContent = entry.path;
-							tabButtons.get("files").firstElementChild.textContent = entry.name;
-							preview.innerHTML = "<div class=\"dfb-empty\">正在读取…</div>";
-							const response = await api(sessionId, "preview", entry.path);
-							if (!response.ok || !("preview" in response)) {
-								renderPreviewMessage(preview, "无法预览文件", response.ok ? "服务端没有返回文件内容。" : response.error, "⚠");
-								return;
-							}
-							renderPreview(preview, response.preview, async (contentValue) => {
-								const saved = await postApi({
-									sessionId,
-									action: "write",
-									path: entry.path,
-									content: contentValue
-								});
-								if (!saved.ok) throw new Error(saved.error);
-							});
+						// PATCH(2026-08-14v6): 文件树条目点击统一走 openFile（文件 tab 栈）
+						row.onclick = () => {
+							openFile(entry.path);
 						};
 						target.append(row);
 					}
@@ -50020,20 +50039,108 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 					load(sessionId, "", tree);
 				}
 			};
+			// PATCH(2026-08-14v6d): 树单例跨 tab 移动时保持滚动位置（强制 reflow 后再恢复）
+			const moveTreeTo = (target) => {
+				if (treePane.parentElement === target) return;
+				const st = tree.scrollTop;
+				target.append(treePane);
+				void treePane.offsetHeight; // 强制同步 reflow，让布局先稳定
+				tree.scrollTop = st;
+				requestAnimationFrame(() => {
+					tree.scrollTop = st; // 双保险：下一帧布局稳定后再次恢复
+				});
+			};
+			// PATCH(2026-08-14v6): 激活指定文件 tab（隐藏功能视图，显示目标文件）
+			const activateFileTab = (id) => {
+				const ft = fileTabs.get(id);
+				if (ft === void 0 || activeFileTab === id) return;
+				if (activeFileTab !== null) {
+					const prev = fileTabs.get(activeFileTab);
+					if (prev !== void 0) {
+						prev.view.hidden = true;
+						prev.tabBtn.dataset.active = "false";
+					}
+				}
+				activeFileTab = id;
+				for (const [key, view] of views) view.hidden = true;
+				for (const [key, tab] of tabButtons) tab.dataset.active = "false";
+				ft.view.hidden = false;
+				ft.tabBtn.dataset.active = "true";
+				// PATCH(2026-08-14v6g): tab 与会话绑定 —— 树切到 tab 所属工作区
+				if (ft.sessionId !== currentSession()) {
+					loadedSession = ft.sessionId;
+					if (ft.sessionId !== void 0) load(ft.sessionId, "", tree);
+				}
+				// PATCH(2026-08-14v6b): 树单例跟随激活的文件 tab（保持滚动）
+				moveTreeTo(ft.view);
+			};
+			// PATCH(2026-08-14v6): 关闭文件 tab（silent 用于批量清理，不切换视图）
+			const closeFileTab = (id, silent = false) => {
+				const ft = fileTabs.get(id);
+				if (ft === void 0) return;
+				ft.view.remove();
+				ft.tabBtn.remove();
+				fileTabs.delete(id);
+				if (activeFileTab === id) {
+					activeFileTab = null;
+					if (!silent) selectKind("files");
+				}
+				// PATCH(2026-08-14v6b): 关闭最后一个文件 tab，树单例移回 filesView（保持滚动）
+				if (fileTabs.size === 0) moveTreeTo(body);
+			};
 			const openFile = async (path) => {
 				open();
 				const sessionId = currentSession();
 				if (sessionId === void 0) return;
-				selectKind("files");
-				currentPath.textContent = path;
-				tabButtons.get("files").firstElementChild.textContent = path.split("/").at(-1) ?? path;
-				preview.innerHTML = "<div class=\"dfb-empty\">正在读取…</div>";
+				// 查重：同 path 已打开 → 激活已有 tab
+				for (const [id, ft] of fileTabs) {
+					if (ft.path === path) {
+						activateFileTab(id);
+						return;
+					}
+				}
+				// 新建文件 tab（独立 preview，Codex 式多文件）
+				const id = `file-${++fileTabSeq}`;
+				const base = (path.split("/").at(-1) ?? path).split("\\").at(-1) ?? path;
+				const view = document.createElement("div");
+				view.className = "dfb-body dfb-view";
+				view.dataset.tree = "true";
+				const tpreview = document.createElement("div");
+				tpreview.className = "dfb-preview";
+				tpreview.innerHTML = "<div class=\"dfb-empty\">正在读取…</div>";
+				view.append(tpreview);
+				content.append(view);
+				const tabBtn = document.createElement("button");
+				tabBtn.type = "button";
+				tabBtn.className = "dfb-panel-tab";
+				tabBtn.dataset.active = "false";
+				const label = document.createElement("span");
+				label.textContent = base;
+				const closeTab = document.createElement("span");
+				closeTab.textContent = "　×";
+				closeTab.title = "关闭文件";
+				closeTab.onclick = (event) => {
+					event.stopPropagation();
+					closeFileTab(id);
+				};
+				tabBtn.append(label, closeTab);
+				tabBtn.onclick = () => activateFileTab(id);
+				panelTabs.append(tabBtn);
+				fileTabs.set(id, { path, sessionId, title: base, tabBtn, view, preview: tpreview });
+				// PATCH(2026-08-14v6c): 打开第一个文件后隐藏「文件」功能 tab（树已随文件 tab 走）
+				if (fileTabs.size === 1) {
+					openKinds.delete("files");
+					const ftab = tabButtons.get("files");
+					if (ftab !== void 0) ftab.hidden = true;
+				}
+				activateFileTab(id);
+				// 加载文件内容
 				const response = await api(sessionId, "preview", path);
 				if (!response.ok || !("preview" in response)) {
-					renderPreviewMessage(preview, "无法预览文件", response.ok ? "服务端没有返回文件内容。" : response.error, "⚠");
+					renderPreviewMessage(tpreview, "无法预览文件", response.ok ? "服务端没有返回文件内容。" : response.error, "⚠");
 					return;
 				}
-				renderPreview(preview, response.preview, async (contentValue) => {
+				renderPreview(tpreview, response.preview, async (contentValue) => {
 					const saved = await postApi({
 						sessionId,
 						action: "write",
@@ -50082,6 +50189,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 					});
 					xterm?.dispose();
 					tabObserver.disconnect();
+					unsubSessions();
 					if (browserTabWhale !== null) removeFishLogo(browserTabWhale);
 					browserTab?.remove();
 					contextMenu.remove();
