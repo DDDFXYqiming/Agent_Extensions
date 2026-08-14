@@ -1,24 +1,26 @@
 # reapply-pi-ai-vision-patch.ps1
-# 给 dsh-llm-pi-ai 打「图片→路径占位符」补丁（vision-skill patch v2 对齐 dsh-llm-deepseek 官方行为）
-# 用法: 在 dsh npm 升级/重装后执行一次: powershell -File 本脚本
-# 幂等: 已打补丁时自动跳过（检测 marker 注释）
+# 给 dsh-llm-pi-ai 打两个宿主补丁（各自独立幂等，dsh npm 升级/重装后执行一次）：
+#   1) vision-skill patch v2 ——「图片→路径占位符」（纯文本模型贴图 → 路径文本 → vision 工具）
+#   2) zen-ua patch v1 —— 用户显式配置的 User-Agent 优先于 DSH 归因 UA
+#      （OpenCode Zen 免费模型按 UA 放行免费额度：只认 opencode/<ver>，否则 429 FreeUsageLimitError）
+# 用法: powershell -File 本脚本
 $ErrorActionPreference = 'Stop'
 $target = Join-Path $env:APPDATA "npm\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\dsh-llm-pi-ai\lib\index.js"
 
 if (-not (Test-Path $target)) { Write-Error "未找到 dsh-llm-pi-ai/lib/index.js: $target"; exit 1 }
 
 $content = Get-Content $target -Raw -Encoding UTF8
-$marker = '[vision-skill patch v2]'
+$visionMarker = '[vision-skill patch v2]'
+$uaMarker = '[zen-ua patch v1]'
 
-if ($content.Contains($marker)) {
-    Write-Host "补丁已存在，跳过（幂等）。"
-    exit 0
-}
-
-# 1) 插入 blockToTextPi 函数（imports 之后、//#region lib/types/replay.js 之前）
-$anchor = '//#region lib/types/replay.js'
-if (-not $content.Contains($anchor)) { Write-Error "锚点1缺失: $anchor"; exit 1 }
-$fn = @'
+# ---------- 补丁 1：图片→路径占位符 ----------
+if ($content.Contains($visionMarker)) {
+    Write-Host "[1/2] vision 补丁已存在，跳过。"
+} else {
+    # 1a) 插入 blockToTextPi 函数（imports 之后、//#region lib/types/replay.js 之前）
+    $anchor = '//#region lib/types/replay.js'
+    if (-not $content.Contains($anchor)) { Write-Error "锚点1缺失: $anchor"; exit 1 }
+    $fn = @'
 /** [vision-skill patch v2] Render one image block to a path-bearing text placeholder. */
 function blockToTextPi(block) {
 	const ref = block.attachment;
@@ -31,16 +33,16 @@ function blockToTextPi(block) {
 	return `[图片附件 ${id}${name}，本地路径 ${path}，模型不支持直接读图，请用 vision skill 读取]`;
 }
 '@
-$content = $content.Replace($anchor, "$fn$anchor")
+    $content = $content.Replace($anchor, "$fn$anchor")
 
-# 2) 替换图片拒绝逻辑（纯文本模型 → 图片转路径占位符）
-$old = 'const containsImage = options.messages.some((message) => contentHasImage(message.content));
+    # 1b) 替换图片拒绝逻辑（纯文本模型 → 图片转路径占位符）
+    $old = 'const containsImage = options.messages.some((message) => contentHasImage(message.content));
 				if (containsImage && !model.input.includes("image")) throw new LlmError(`pi-ai model "${model.id}" does not support image input`, "UNSUPPORTED_CONTENT");
 				const attachments = containsImage ? this.config.resolveAttachments?.() : void 0;
 				if (containsImage && attachments === void 0) throw new LlmError("pi-ai image input requires the durable attachment service", "UNSUPPORTED_CONTENT");
 				const context = attachments === void 0 ? toPiContext(options) : await toPiContext(options, attachments);'
 
-$new = 'let messages = options.messages;
+    $new = 'let messages = options.messages;
 				const containsImage = messages.some((message) => contentHasImage(message.content));
 				if (containsImage && !model.input.includes("image")) {
 					// [vision-skill patch v2] 图片→路径占位符：纯文本模型把 image 块转为带本地路径的文本块，
@@ -57,11 +59,46 @@ $new = 'let messages = options.messages;
 				if (hasImage && attachments === void 0) throw new LlmError("pi-ai image input requires the durable attachment service", "UNSUPPORTED_CONTENT");
 				const context = attachments === void 0 ? toPiContext(options) : await toPiContext(options, attachments);'
 
-if (-not $content.Contains($old)) { Write-Error "锚点2缺失（图片拒绝逻辑未匹配，可能 DSH 版本已变化）"; exit 1 }
-$content = $content.Replace($old, $new)
+    if (-not $content.Contains($old)) { Write-Error "锚点2缺失（图片拒绝逻辑未匹配，可能 DSH 版本已变化）"; exit 1 }
+    $content = $content.Replace($old, $new)
+    Write-Host "[1/2] vision 补丁已应用。"
+}
+
+# ---------- 补丁 2：User-Agent 用户配置优先 ----------
+if ($content.Contains($uaMarker)) {
+    Write-Host "[2/2] zen-ua 补丁已存在，跳过。"
+} else {
+    $oldUA = 'function requestHeaders(headers) {
+	const attribution = attributionHeaders();
+	const reserved = new Set(Object.keys(attribution).map((name) => name.toLowerCase()));
+	return {
+		...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
+		...attribution
+	};
+}'
+    $newUA = 'function requestHeaders(headers) {
+	const attribution = attributionHeaders();
+	// [zen-ua patch v1] 用户显式配置的 User-Agent 优先于 DSH 归因 user-agent——
+	// OpenCode Zen 免费模型按 UA 放行额度（只认 opencode/<ver>），DSH 默认
+	// deepseek-harness UA 会导致 429 FreeUsageLimitError。
+	const user = Object.fromEntries(Object.entries(headers ?? {}));
+	const userHasUA = Object.keys(user).some((name) => name.toLowerCase() === "user-agent");
+	if (userHasUA) {
+		const { "user-agent": _dropped, ...rest } = attribution;
+		return { ...user, ...rest };
+	}
+	return {
+		...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !Object.keys(attribution).map((n) => n.toLowerCase()).includes(name.toLowerCase()))),
+		...attribution
+	};
+}'
+    if (-not $content.Contains($oldUA)) { Write-Error "锚点3缺失（requestHeaders 未匹配，可能 DSH 版本已变化）"; exit 1 }
+    $content = $content.Replace($oldUA, $newUA)
+    Write-Host "[2/2] zen-ua 补丁已应用。"
+}
 
 Set-Content -Path $target -Value $content -Encoding UTF8 -NoNewline
-Write-Host "补丁已应用: $target"
+Write-Host "补丁已写入: $target"
 node --check $target
 if ($LASTEXITCODE -ne 0) { Write-Error "补丁后语法检查失败，请恢复原文件"; exit 1 }
 Write-Host "语法 OK。重启 DSH 后生效。"
