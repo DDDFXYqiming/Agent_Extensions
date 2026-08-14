@@ -3,3 +3,6 @@ __tools/
 .rollback/
 __pycache__/
 *.pyc
+
+# Node deps (dsh-plugins)
+node_modules/
