@@ -47,6 +47,8 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "link:C:/Users/39795/.bun/install/global/node_modules/@deepseek-ai/schemastery"
+    "@deepseek-ai/dsh-tools": "link:C:/Users/39795/.dsh/profiles/node_modules/@deepseek-ai/dsh-tools",
+    "@deepseek-ai/dsh-credentials": "link:C:/Users/39795/.dsh/profiles/node_modules/@deepseek-ai/dsh-credentials",
+    "@deepseek-ai/schemastery": "link:C:/Users/39795/.dsh/profiles/node_modules/@deepseek-ai/schemastery"
   }
 }
