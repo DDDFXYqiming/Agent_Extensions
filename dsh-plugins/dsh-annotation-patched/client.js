@@ -133,9 +133,12 @@ window.__ModuleLoader__.load({
         '.dsh-ann-cancel:hover { background: var(--dsw-alias-interactive-bg-hover); }',
         '.dsh-ann-error { color: var(--dsw-alias-state-error-primary, #ff7a7a);',
         '  font-size: 12px; margin-top: 8px; word-break: break-word; }',
-        '.dsh-ann-hl { position: fixed; z-index: 900; background: rgba(255, 195, 0, .15);',
+        // PATCH(2026-08-14e): 高亮/编号层 z-index 900/940 → 60/70——对话滚动后 fixed
+        // 高亮层不随滚动容器裁剪，会漂浮到输入栏区域；DSH 输入栏/菜单层 z-index ≥ 100，
+        // 原 900 会盖住输入栏与参数控件。60/70 仍高于对话文本（auto/0），低于输入栏。
+        '.dsh-ann-hl { position: fixed; z-index: 60; background: rgba(255, 195, 0, .15);',
         '  border-radius: 2px; pointer-events: none; animation: dsh-ann-fadein .15s ease; }',
-        '.dsh-ann-num { position: fixed; z-index: 940; display: inline-flex; align-items: center;',
+        '.dsh-ann-num { position: fixed; z-index: 70; display: inline-flex; align-items: center;',
         '  justify-content: center; min-width: 16px; height: 16px; padding: 0 4px;',
         '  border-radius: 8px; border: 1px solid rgba(255, 255, 255, .3);',
         '  background: var(--dsw-alias-text-accent, #4c9aff); color: #fff;',
