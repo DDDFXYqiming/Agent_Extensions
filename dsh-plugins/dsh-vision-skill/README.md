@@ -2,7 +2,7 @@
 
 **DeepSeek Harness（DSH）标准插件版识图技能** —— 把本仓库 `General_skills/vision-skill`（源自 Qwen 官方动态分辨率方法）包装成 DSH 原生插件。
 
-> 零框架补丁：只使用官方扩展接缝（`ctx.skills.register` / `ctx.tools.register` / `ctx.credentials` / `agent.ctx.tools`），可随 DSH 版本升级。
+> 零框架补丁：插件本身只使用官方扩展接缝（`ctx.skills.register` / `ctx.tools.register` / `ctx.credentials` / `agent.ctx.tools`），可随 DSH 版本升级。仅当主模型走 pi-ai 适配器（opencode-go / 自定义 provider）且需要"直接贴图"时，需给宿主打一个幂等补丁（见下文[适配器支持矩阵](#图片投递机制与适配器支持矩阵)）。
 
 ## 能力一览（7 工具 + 1 运行时 skill）
 
@@ -36,6 +36,7 @@ Qwen 官方动态分辨率预处理（`smart_resize`：预算像素 + patch 网�
 dsh-vision-skill/
 ├── lib/index.js          # 插件主体（skill 注册 + 7 工具 + 渐进暴露 + 围栏）
 ├── scripts/vision.py     # 识图脚本（动态分辨率 / OCR / grounding / 主色 / 长图分块）
+├── scripts/reapply-pi-ai-vision-patch.ps1  # pi-ai 适配器「图片→路径」幂等补丁脚本（dsh 升级后重跑）
 ├── SKILL.md              # 运行时 skill 内容（模型按需加载）
 ├── package.json          # 插件包声明（peerDependencies: dsh-tools / dsh-credentials）
 └── templates/.env.example # 脚本独立运行时的配置模板
@@ -105,11 +106,33 @@ VISION_API_KEY: sk-xxxx
 |---|---|---|
 | ① 路径直发 | 图片已在本地（或放一份到工作区），对话框发路径文本："识别这张图 `E:\...\xxx.png`" | **所有环境** |
 | ② 剪贴板 | Win+Shift+S 截屏（图片自动进剪贴板）→ 对话框说"看图"，`vision_clipboard` 自动保存到工作区 `.dsh-vision/` 再识别 | **所有环境** |
-| ③ 直接贴图 | 输入框粘贴图片直接发送，框架补丁自动转为带路径的文本占位符 → 模型看到路径 → 自动调 `vision_analyze` | 仅限打了图片通道补丁的宿主 |
+| ③ 直接贴图 | 输入框粘贴图片直接发送，适配器自动转为带路径的文本占位符 → 模型看到路径 → 自动调 `vision_analyze` | 见下方适配器支持矩阵 |
 
-**零补丁环境说明**：未打图片通道补丁时，直接贴图会被框架拒绝（`attachment-error` / `MODEL_DOES_NOT_SUPPORT_IMAGES`）——这是纯文本模型的能力门禁，不是插件问题（社区插件 [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit) 的 FAQ 同样要求用户"把文件放进工作区以路径形式使用"）。此时请用方式 ①/②，插件即可正常工作。
+## 图片投递机制与适配器支持矩阵
 
-> 方式 ③ 依赖的"图片通道补丁"是把粘贴的图片自动转换为带路径的文本占位符（`dsh-host-apiproxy` 门禁放行 + `dsh-llm-deepseek` 图片→路径转换）。**插件本身零框架补丁**，在任何 DSH 环境用方式 ①/② 均开箱即用。
+**原理**：贴图时图片存入 DSH 附件库（`$DSH_HOME/attachments/v1/objects/<sha256前2位>/<sha256>`），适配器把 image 块转换为**带本地路径的文本占位符**（`[图片附件 sha256:...，本地路径 ...，请用 vision skill 读取]`）——纯文本主模型收到的是路径文本，再调用 `vision_analyze` 识别。**看图能力来自本插件（独立多模态 API），主模型只需能读文本路径 + 调工具**；转换发生在适配器层，模型本身始终收不到图片。
+
+| 适配器 / 场景 | 直接贴图（方式③） | 说明 |
+|---|---|---|
+| `dsh-llm-deepseek`（deepseek-official） | ✅ 开箱即用 | DSH 新版**原生内置**图片→路径转换（源自 vision-skill patch v2，官方已采纳） |
+| `dsh-llm-pi-ai`（opencode-go / 自定义 OpenAI 兼容 provider） | ⚠️ 需打补丁 | 原生逻辑会拒绝（`UNSUPPORTED_CONTENT`）；打补丁后与官方行为一致；不打补丁时用方式 ①/② 仍正常 |
+| 多模态模型（`input` 含 image） | ✅ 图片直达 | 无需转换（模型原生看图） |
+
+**零补丁环境说明**：未打补丁的 pi-ai 适配器下，直接贴图会被拒绝（`UNSUPPORTED_CONTENT`——纯文本模型的能力门禁，不是插件问题）。此时请用方式 ①/②，插件即可正常工作（社区插件 [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit) 的 FAQ 同样要求用户"把文件放进工作区以路径形式使用"）。
+
+### pi-ai 适配器补丁（opencode-go 等）
+
+DSH 的 pi-ai 多提供方适配器（`dsh-llm-pi-ai`，用于 opencode-go / 自定义 provider）尚未内置图片→路径转换。本插件提供**幂等补丁脚本**：
+
+```powershell
+# 在 dsh npm 升级/重装后执行一次（幂等：已打补丁自动跳过）
+powershell -File scripts\reapply-pi-ai-vision-patch.ps1
+# 然后重启 DSH 宿主生效
+```
+
+- 补丁内容：给 `dsh-llm-pi-ai/lib/index.js` 增加 `blockToTextPi`（占位符格式与官方 `dsh-llm-deepseek` 完全一致，保证 vision 工作流格式统一）
+- **dsh 升级后需重跑脚本**（node_modules 被覆盖）；改 `lib/index.js` 后需重启宿主
+- 补丁只影响 pi-ai 适配器的纯文本模型（`input` 不含 image）；真正多模态的模型不受影响
 
 ## 使用示例
 
