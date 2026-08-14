@@ -823,6 +823,32 @@ window.__ModuleLoader__.load({
       // 提交）——否则等我们执行时消息已提交，拼稿永远太迟。
       document.addEventListener('keydown', onKeyDown, true)
 
+      // PATCH(2026-08-14d): 点击发送按钮同样要拼稿——DSH composer 的发送按钮
+      // 走 onClick: onPrimary 直接提交草稿，不产生 keydown Enter；若用户点按钮
+      // 发送（而非回车），引用块不会拼进草稿，消息发出后 watchInputDraft 又按
+      // 「草稿从有→空」清空 quotes，引用被静默丢弃（「添加了引用但没带上」）。
+      // 在 capture 阶段拦截点击：目标是 composer 卡内的主发送按钮（primary
+      // 类 + aria-label 含「发送/Send」且非「停止/Stop」）时，先拼稿再放行。
+      function onDocClickCapture(e) {
+        if (ui.quotes.length === 0) return
+        var target = e.target
+        if (!(target instanceof Element)) return
+        var btn = target.closest('button')
+        if (btn === null) return
+        var card = btn.closest('[data-composer-card]')
+        if (card === null) return
+        // 发送按钮特征：primary 类 + aria-label 是发送语义（本地化：发送/Send/Submit）。
+        // 停止按钮（stop）也同卡同域，但 aria-label 是「停止/Stop」——显式排除。
+        var label = (btn.getAttribute('aria-label') || '').trim()
+        if (label === '') return
+        var isStop = /停止|stop/i.test(label)
+        var isSend = /发送|send|submit/i.test(label)
+        if (!isSend || isStop) return
+        if (btn.disabled) return
+        attachAndSend()
+      }
+      document.addEventListener('click', onDocClickCapture, true)
+
       // ---------- 渲染 ----------
       function iconButton(cls, icon, title, onClick) {
         var b = document.createElement('button')
@@ -1724,6 +1750,7 @@ window.__ModuleLoader__.load({
         document.removeEventListener('selectionchange', onSelection)
         document.removeEventListener('pointerdown', onDocPointerDown, true)
         document.removeEventListener('keydown', onKeyDown, true)
+        document.removeEventListener('click', onDocClickCapture, true)
         document.removeEventListener('compositionstart', markImeComposing, true)
         document.removeEventListener('compositionend', markImeEnded, true)
         if (imeClearTimer !== null) { clearTimeout(imeClearTimer); imeClearTimer = null }
