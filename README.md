@@ -1,16 +1,27 @@
 # Agent_Extensions
 
-**AI Agent 技能与 DeepSeek Harness（DSH）扩展集合** —— 通用智能体 Skill + DSH 原生插件 + Hermes 插件，开箱即用。
+**DeepSeek Harness（DSH）插件与 AI Agent 技能集合** —— 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的原生插件（走官方扩展接缝，零框架补丁）+ 跨框架通用 Skill + Hermes 插件，开箱即用。
 
 ![repo](https://img.shields.io/badge/agent-skills-4B8BBE) ![dsh](https://img.shields.io/badge/deepseek--harness-plugin-7A4FBF) ![license](https://img.shields.io/badge/license-MIT-green)
 
-本仓库收集、翻译并**自包含封装** AI Agent 相关的技能资源，并面向 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) 提供标准插件形式的扩展。所有内容均为**自包含**（技能/插件内自带脚本、模板与文档，不依赖仓库外文件），克隆即可用。
+本仓库收集、翻译并**自包含封装** AI Agent 相关的技能资源，并面向 **DeepSeek Harness（DSH）** 提供标准插件形式的扩展。所有内容均为**自包含**（技能/插件内自带脚本、模板与文档，不依赖仓库外文件），克隆即可用。
 
 > **来源说明**：`dsh-plugins/` 除 `dsh-annotation-patched`（fork 自 [omdsh-dev/dsh-annotation](https://github.com/omdsh-dev/dsh-annotation)）与 `dsh-side-panel-patched`（fork 自 [ccq1/dsh-side-panel](https://github.com/ccq1/dsh-side-panel)）外均为本仓库原创；`General_skills/` 与 `hermes_plugins/` 为收集、翻译并自包含封装的社区开源技能/插件（作者已在各 `SKILL.md`/`plugin.yaml` 中标注），全部按 MIT 许可分发。
 
 ## ✨ 内容总览
 
-### 1️⃣ 通用技能（General_skills）—— 跨框架可用
+### 1️⃣ DSH 原生插件（dsh-plugins）—— 零框架补丁
+
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 官方扩展接缝（`ctx.skills` / `ctx.tools` / `ctx.credentials` / `ctx.slots` / `ctx.layout`），可随 DSH 版本升级：
+
+| 插件 | 能力 | 依赖 |
+|---|---|---|
+| `dsh-vision-skill` v2.1 | 识图插件：7 个工具 + 渐进式工具暴露 + Credential 化 + 路径围栏 | Node.js + DSH（`dsh-tools` / `dsh-credentials`）、Python 3 + Pillow、视觉模型 API Key |
+| `dsh-memory` | 跨会话长期记忆：L1 索引注入（每轮实时、KV 缓存友好）+ L2 环境事实 + L3 任务经验，行动验证写入 | Node.js + DSH（`dsh-tools`） |
+| `dsh-annotation-patched` | 选中批注/引用插件（fork 增强）：选中助手回复文字 → 批注（可空）或一键「引用」→ 回车随消息发送，回复按 `Annotation N` 逐条对照；增强：Codex 式「引用」按钮（显式确认制）+ 幽灵引用修复 | Node.js + DSH（纯浏览器端 bundle，零 Node 逻辑） |
+| `dsh-side-panel-patched` | 右侧工作区面板（fork 增强）：文件树/多文件 tab/预览/编辑（CodeMirror）+ Git 审查 + 终端；增强：绕开官方 520px 宽度上限、头部像素级对齐、Codex 风格梭形拖拽把手、文件 tab 栈 + 会话跟踪、Windows 终端防崩溃 | Node.js + DSH（文件/Git/终端 API + 浏览器 bundle） |
+
+### 2️⃣ 通用技能（General_skills）—— 跨框架可用
 
 任何智能体框架（Claude Code / Codex / opencode / DSH / Hermes 等）均可把目录作为 Skill 挂载：
 
@@ -24,17 +35,6 @@
 
 > 所有技能均内置 `SKILL.md`（agent 运行时加载的指令），部分附 `scripts/`、`templates/`、`references/`。
 
-### 2️⃣ DSH 原生插件（dsh-plugins）—— 零框架补丁
-
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 官方扩展接缝（`ctx.skills` / `ctx.tools` / `ctx.credentials`），可随 DSH 版本升级：
-
-| 插件 | 能力 | 依赖 |
-|---|---|---|
-| `dsh-vision-skill` v2.1 | 识图插件：7 个工具 + 渐进式工具暴露 + Credential 化 + 路径围栏 | Node.js + DSH（`dsh-tools` / `dsh-credentials`）、Python 3 + Pillow、视觉模型 API Key |
-| `dsh-memory` | 跨会话长期记忆：L1 索引注入（每轮实时、KV 缓存友好）+ L2 环境事实 + L3 任务经验，行动验证写入 | Node.js + DSH（`dsh-tools`） |
-| `dsh-annotation-patched` | 选中批注/引用插件（fork 增强）：选中助手回复文字 → 批注（可空）或一键「引用」→ 回车随消息发送，回复按 `Annotation N` 逐条对照；增强：Codex 式「引用」按钮（显式确认制）+ 幽灵引用修复 | Node.js + DSH（纯浏览器端 bundle，零 Node 逻辑） |
-| `dsh-side-panel-patched` | 右侧工作区面板（fork 增强）：文件树/预览/编辑（CodeMirror）+ Git 审查 + 终端；增强：绕开官方 520px 宽度上限（420~60% 视口自由拖宽）、头部与官方 header 像素级对齐、Codex 风格梭形拖拽把手、Windows 终端防崩溃 | Node.js + DSH（文件/Git/终端 API + 浏览器 bundle） |
-
 ### 3️⃣ Hermes 插件（hermes_plugins）
 
 | 插件 | 能力 | 依赖 |
@@ -45,17 +45,17 @@
 
 ```
 Agent_Extensions/
+├── dsh-plugins/               # DeepSeek Harness（DSH）原生插件
+│   ├── dsh-vision-skill/      # 识图插件 v2.1（7 工具 + 渐进式暴露 + Credential 化）
+│   ├── dsh-memory/            # 跨会话分层长期记忆
+│   ├── dsh-annotation-patched/ # 选中批注/引用插件（fork 增强，Codex 式选中即引用）
+│   └── dsh-side-panel-patched/ # 右侧工作区面板（fork 增强，多文件 tab + 会话跟踪）
 ├── General_skills/            # 通用智能体技能（跨框架，挂载即用）
 │   ├── vision-skill/          # 识图
 │   ├── video-notes-generator/ # 视频转结构化笔记
 │   ├── ppt-master/            # 文档 → SVG → PPTX
 │   ├── markitdown-skill/      # 任意文档 → Markdown
 │   └── generic-agent-code-run/ # Windows 桌面/浏览器自动化
-├── dsh-plugins/               # DeepSeek Harness（DSH）原生插件
-│   ├── dsh-vision-skill/      # 识图插件 v2.1（7 工具 + 渐进式暴露 + Credential 化）
-│   ├── dsh-memory/            # 跨会话分层长期记忆
-│   ├── dsh-annotation-patched/ # 选中批注/引用插件（fork 增强，Codex 式选中即引用）
-│   └── dsh-side-panel-patched/ # 右侧工作区面板（fork 增强，绕开 520 上限 + 对齐 + 梭形把手）
 ├── hermes_plugins/            # Hermes 框架插件
 │   └── language-router/       # 语言路由（planner-first）
 └── README.md
@@ -63,26 +63,7 @@ Agent_Extensions/
 
 ## 🚀 快速开始
 
-### 方式一：挂载通用技能（任何框架）
-
-以 `vision-skill` 为例：
-
-```bash
-# 1. 复制技能目录到你的 agent 的 skills 目录
-#    （Claude Code: ~/.claude/skills/ ；Codex: ~/.codex/skills/ ；其他框架见其文档）
-cp -r General_skills/vision-skill <你的 skills 目录>/
-
-# 2. 配置视觉模型（OpenAI 兼容接口）
-cd General_skills/vision-skill
-cp templates/.env.example .env   # 填入 VISION_API_URL / VISION_MODEL / VISION_API_KEY
-
-# 3. 自检
-python scripts/vision.py --check
-```
-
-其他技能用法详见各目录内 `SKILL.md`。
-
-### 方式二：安装 DSH 插件（以 `dsh-vision-skill` 为例）
+### 方式一：安装 DSH 插件（以 `dsh-vision-skill` 为例）
 
 完整步骤见 [`dsh-plugins/dsh-vision-skill/README.md`](dsh-plugins/dsh-vision-skill/README.md)，推荐 **bundle 标准安装**：
 
@@ -102,6 +83,25 @@ VISION_API_KEY: sk-xxxx
 ```
 
 > ⚠️ bundle 安装后**不要**在 profile 的 `cordis.patch.yml` 里再 `insert` 同名条目，否则会触发 `duplicate loader entry id` 启动崩溃；需要自定义配置时用裸条目按 id 覆盖（见插件 README）。
+
+### 方式二：挂载通用技能（任何框架）
+
+以 `vision-skill` 为例：
+
+```bash
+# 1. 复制技能目录到你的 agent 的 skills 目录
+#    （Claude Code: ~/.claude/skills/ ；Codex: ~/.codex/skills/ ；其他框架见其文档）
+cp -r General_skills/vision-skill <你的 skills 目录>/
+
+# 2. 配置视觉模型（OpenAI 兼容接口）
+cd General_skills/vision-skill
+cp templates/.env.example .env   # 填入 VISION_API_URL / VISION_MODEL / VISION_API_KEY
+
+# 3. 自检
+python scripts/vision.py --check
+```
+
+其他技能用法详见各目录内 `SKILL.md`。
 
 ### 方式三：安装 Hermes 插件
 
@@ -145,19 +145,30 @@ VISION_API_KEY: sk-xxxx
 
 来源：[omdsh-dev/dsh-annotation](https://github.com/omdsh-dev/dsh-annotation) v1.3.13（MIT），全部改动带 `PATCH(2026-08-14)` 标记，详见目录内 `README.md`。
 
+### dsh-side-panel-patched（右侧工作区面板，fork 增强）
+
+| 能力 | 说明 |
+|---|---|
+| 文件树 + 多文件 tab | 文件树点文件 → 独立 tab（同时打开多个文件，切换/单关/查重激活），**树单例跟随**激活 tab、滚动位置跨 tab 保持 |
+| 会话跟踪 | 切换工作区 → 树重载当前工作区；文件 tab **按会话分组**（各自保留、切换显示、互不串扰） |
+| Git 审查 / 终端 | 工作区变更审查（stage/unstage）；终端 Windows 友好降级（Unix PTY 限制不崩溃） |
+| 布局增强 | 绕开官方 520px 宽度上限（420~60% 视口自由拖宽）、头部与官方 header 像素级对齐、Codex 风格梭形拖拽把手、放大按钮全宽切换 |
+
+来源：[ccq1/dsh-side-panel](https://github.com/ccq1/dsh-side-panel) v0.2.0（BSD-3-Clause），全部改动带 `PATCH(2026-08-14)` 标记，详见目录内 `README.md`。
+
 ## ⚙️ 环境要求
 
 | 使用场景 | 要求 |
 |---|---|
-| 通用技能（vision / video / ppt / markitdown / automation） | Python 3.x + 各技能列出的 pip 依赖 |
 | DSH 插件 | Node.js + DSH（`@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-credentials`） |
 | dsh-vision-skill / vision-skill | 额外需要 Python 3 + Pillow，以及**任意 OpenAI 兼容多模态模型** API Key（Qwen-VL / MiniMax-M3 / Gemini / GPT-4o，默认 MiniMax-M3） |
+| 通用技能（vision / video / ppt / markitdown / automation） | Python 3.x + 各技能列出的 pip 依赖 |
 | Hermes 插件 | Hermes 框架 |
 
 ## ❓ FAQ
 
 **Q：通用技能和 DSH 插件怎么选？**
-A：通用技能跨框架，任何 agent 都能挂载；DSH 插件是 DSH 原生扩展，走官方接缝（工具注册 / Credential / 上下文注入），能力更强但只适用于 DSH。两者能力互通——`dsh-vision-skill` 就是把 `General_skills/vision-skill` 包装成 DSH 原生插件。
+A：通用技能跨框架，任何 agent 都能挂载；DSH 插件是 DSH 原生扩展，走官方接缝（工具注册 / Credential / 上下文注入 / 布局插槽），能力更强但只适用于 DSH。两者能力互通——`dsh-vision-skill` 就是把 `General_skills/vision-skill` 包装成 DSH 原生插件。
 
 **Q：我的模型不支持图片，能识图吗？**
 A：能。直接贴图会被框架拒绝（`MODEL_DOES_NOT_SUPPORT_IMAGES`），改用两种方式：① 发图片的本地路径文本；② 截图后说"看图"，`vision_clipboard` 自动保存到工作区再识别。这是纯文本模型的能力门禁，不是插件问题。
