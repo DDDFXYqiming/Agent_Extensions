@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-annotation
+      name: '@omdsh-dev/dsh-annotation'
