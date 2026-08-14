@@ -32,7 +32,7 @@
 |---|---|---|
 | `dsh-vision-skill` v2.1 | 识图插件：7 个工具 + 渐进式工具暴露 + Credential 化 + 路径围栏 | Node.js + DSH（`dsh-tools` / `dsh-credentials`）、Python 3 + Pillow、视觉模型 API Key |
 | `dsh-memory` | 跨会话长期记忆：L1 索引注入（每轮实时、KV 缓存友好）+ L2 环境事实 + L3 任务经验，行动验证写入 | Node.js + DSH（`dsh-tools`） |
-| `dsh-annotation-patched` | 选中批注/引用插件（fork 增强）：选中助手回复文字 → 批注（可空）→ 回车随消息发送，回复按 `Annotation N` 逐条对照；增强：Codex 式选中即引用 + 幽灵引用修复 | Node.js + DSH（纯浏览器端 bundle，零 Node 逻辑） |
+| `dsh-annotation-patched` | 选中批注/引用插件（fork 增强）：选中助手回复文字 → 批注（可空）或一键「引用」→ 回车随消息发送，回复按 `Annotation N` 逐条对照；增强：Codex 式「引用」按钮（显式确认制）+ 幽灵引用修复 | Node.js + DSH（纯浏览器端 bundle，零 Node 逻辑） |
 
 ### 3️⃣ Hermes 插件（hermes_plugins）
 
@@ -138,7 +138,7 @@ VISION_API_KEY: sk-xxxx
 |---|---|
 | 选中批注 | 选中助手回复文字 → 批注（可留空）→ 回车随消息发送；自己的气泡不显示批注块（零闪烁隐藏） |
 | 逐条对照 | 模型按 `Annotation 1: …` 逐条回应，回复中为可悬停芯片（回看原文+批注） |
-| **Codex 式选中即引用**（增强①） | 选中文字后直接回车即自动附带引用，无需点「批注」保存；Esc 放弃快照 |
+| **Codex 式「引用」按钮**（增强①） | 选中文字 → 工具栏「引用」按钮 → 回车即带（空批注纯引用），显式确认制，复制/阅读选中不会误触发 |
 | **幽灵引用修复**（增强②） | 拼稿即清待发送集（原版依赖装饰扫描轮询清理存在竞态残留） |
 
 来源：[omdsh-dev/dsh-annotation](https://github.com/omdsh-dev/dsh-annotation) v1.3.13（MIT），全部改动带 `PATCH(2026-08-14)` 标记，详见目录内 `README.md`。
