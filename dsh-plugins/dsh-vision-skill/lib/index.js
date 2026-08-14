@@ -103,7 +103,9 @@ class Semaphore {
 }
 
 /** 子进程运行（stdout/stderr 按 UTF-8 收集，非零退出码抛错，支持超时与取消）。
- * [spec-audit 2026-08-14] 转发 exec.signal：上层取消回合时中止子进程（tools 执行契约）。 */
+ * [spec-audit 2026-08-14] 转发 exec.signal：上层取消回合时中止子进程（tools 执行契约）。
+ * [fix 2026-08-14] 透传 env：白名单重写时漏掉 env 导致 VISION_API_KEY 等注入丢失
+ * （现象：python 报"找不到 VISION_API_KEY"，手动复刻成功，colors 正常——只有 API 类失败）。 */
 function run(command, args, options) {
 	return new Promise((resolvePromise, reject) => {
 		execFile(command, args, {
@@ -111,6 +113,7 @@ function run(command, args, options) {
 			maxBuffer: 16 * 1024 * 1024,
 			timeout: options.timeoutMs ?? 180000,
 			signal: options.signal,
+			env: options.env,
 		}, (error, stdout, stderr) => {
 			if (error) {
 				if (options.signal?.aborted) {
