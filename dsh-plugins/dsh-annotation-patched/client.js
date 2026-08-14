@@ -133,12 +133,13 @@ window.__ModuleLoader__.load({
         '.dsh-ann-cancel:hover { background: var(--dsw-alias-interactive-bg-hover); }',
         '.dsh-ann-error { color: var(--dsw-alias-state-error-primary, #ff7a7a);',
         '  font-size: 12px; margin-top: 8px; word-break: break-word; }',
-        // PATCH(2026-08-14e): 高亮/编号层 z-index 900/940 → 60/70——对话滚动后 fixed
-        // 高亮层不随滚动容器裁剪，会漂浮到输入栏区域；DSH 输入栏/菜单层 z-index ≥ 100，
-        // 原 900 会盖住输入栏与参数控件。60/70 仍高于对话文本（auto/0），低于输入栏。
-        '.dsh-ann-hl { position: fixed; z-index: 60; background: rgba(255, 195, 0, .15);',
+        // PATCH(2026-08-14e): 高亮/编号盖输入栏的根因是 buildMarkers 把滚动后
+        // 进入 composer 区域的 rect 也渲染成了 fixed 层——正解是「区域过滤」
+        // （buildMarkers 跳过与输入栏重叠的 rect），而非压 z-index（压太低会被
+        // 对话区元素盖住，chip 点不开、取消/删除失效）。z-index 恢复 900/940。
+        '.dsh-ann-hl { position: fixed; z-index: 900; background: rgba(255, 195, 0, .15);',
         '  border-radius: 2px; pointer-events: none; animation: dsh-ann-fadein .15s ease; }',
-        '.dsh-ann-num { position: fixed; z-index: 70; display: inline-flex; align-items: center;',
+        '.dsh-ann-num { position: fixed; z-index: 940; display: inline-flex; align-items: center;',
         '  justify-content: center; min-width: 16px; height: 16px; padding: 0 4px;',
         '  border-radius: 8px; border: 1px solid rgba(255, 255, 255, .3);',
         '  background: var(--dsw-alias-text-accent, #4c9aff); color: #fff;',
@@ -940,6 +941,20 @@ window.__ModuleLoader__.load({
           save.addEventListener('click', saveAnnotation)
           row.appendChild(cancel)
           row.appendChild(save)
+          // PATCH(2026-08-14e): 编辑已有引用时提供「删除引用」——此前删除入口只在
+          // 输入框旁标签的悬浮面板里（hover 才可见），编辑态想删找不到入口。
+          if (ui.editingId !== null) {
+            var del = document.createElement('button')
+            del.type = 'button'
+            del.className = 'dsh-ann-cancel'
+            del.style.cssText = 'color:#ff8a8a;border-color:rgba(255,107,107,.4);'
+            del.textContent = '删除引用'
+            del.addEventListener('click', function () {
+              removeQuote(ui.editingId)
+              closeToolbar()
+            })
+            row.appendChild(del)
+          }
           card.appendChild(row)
           if (ui.error !== null) {
             var err = document.createElement('div')
@@ -990,6 +1005,15 @@ window.__ModuleLoader__.load({
 
       function buildMarkers() {
         if (ui.quotes.length === 0) return
+        // PATCH(2026-08-14e): 区域过滤——高亮/编号只渲染在对话可视区（composer 卡片
+        // 顶部之上）。滚动后引用文本滚进输入栏区域时其 rect.top ≥ composerTop，
+        // 跳过即可，fixed 层永远不落到输入栏上（z-index 高位也不会盖输入栏）。
+        var composerTop = window.innerHeight
+        var composerCard = document.querySelector('[data-composer-card]')
+        if (composerCard !== null) {
+          var cr = composerCard.getBoundingClientRect()
+          if (cr.top > 0) composerTop = cr.top
+        }
         var placed = []
         for (var i = 0; i < ui.quotes.length; i++) {
           var q = ui.quotes[i]
@@ -999,6 +1023,7 @@ window.__ModuleLoader__.load({
           for (var c = 0; c < rects.length; c++) {
             var rect = rects[c]
             if (rect.width === 0 || rect.height === 0) continue
+            if (rect.top >= composerTop) continue
             var hl = document.createElement('div')
             hl.className = 'dsh-ann-hl'
             hl.style.left = rect.left + 'px'
@@ -1011,9 +1036,11 @@ window.__ModuleLoader__.load({
           for (var k = 0; k < rects.length; k++) {
             var r = rects[k]
             if (r.width === 0 || r.height === 0) continue
-            if (r.top > -8 && r.top < window.innerHeight) { anchor = r; break }
+            if (r.top > -8 && r.top < composerTop) { anchor = r; break }
           }
-          if (anchor === null && rects.length > 0 && rects[0].width > 0) anchor = rects[0]
+          // 引用文本整体滚出对话可视区（anchor 为 null）时不显示编号——
+          // 不 fallback 到 rects[0]，否则编号会落到输入栏区域。
+          if (anchor === null) continue
           if (anchor !== null) {
             var chip = document.createElement('div')
             chip.className = 'dsh-ann-num'
