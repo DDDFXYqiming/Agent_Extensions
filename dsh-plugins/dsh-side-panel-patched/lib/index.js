@@ -9,6 +9,9 @@ import Schema from "@deepseek-ai/schemastery";
 const FILE_BROWSER_ROUTE = "/side-panel/api";
 //#endregion
 //#region lib/types/index.js
+// [spec-audit 2026-08-15] 补 name 导出：官方插件形态（name + inject + apply）；
+// 缺失时 loader 用 entry 包名兜底（可加载），显式声明与官方教程一致。
+const name = "side-panel";
 const inject = ["webServer", "sessions"];
 const IMAGE_MIME = {
 	".avif": "image/avif",
@@ -597,4 +600,4 @@ function apply(ctx, config = {}) {
 	}, "side-panel: workspace and terminal API");
 }
 //#endregion
-export { apply, inject, inside, list, preview, search };
+export { apply, inject, name, inside, list, preview, search };
