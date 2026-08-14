@@ -599,7 +599,6 @@ window.__ModuleLoader__.load({
         busy: false,
         lastKey: '',
         pendingAnchor: null,
-        pendingCapture: null,
         el: null,
       }
 
@@ -692,10 +691,6 @@ window.__ModuleLoader__.load({
         if (ui.mode === 'actions' && key === ui.lastKey) { clearSettle(); return }
         var rootEl = assistantRowOf(range.commonAncestorContainer)
         if (rootEl === null) { clearSettle(); closeToolbar(); return }
-        // PATCH(2026-08-14): 立即暂存选区快照，不等 settle 250ms——用户选中后
-        // 快速点输入框会触发 selectionchange → clearSettle 取消定时器，
-        // 快照丢失导致引用不附带（实测竞态）。
-        ui.pendingCapture = { text: text, anchor: captureAnchor(text) }
         clearSettle()
         settleTimer = setTimeout(function () {
           settleTimer = null
@@ -721,9 +716,6 @@ window.__ModuleLoader__.load({
           ui.quote = text
           ui.error = null
           ui.pos = p
-          // PATCH(2026-08-14): Codex 式「选中即引用」——暂存选区快照，
-          // 供 composer 回车时自动消费（此时焦点已移到输入框，getSelection 已失效）。
-          ui.pendingCapture = { text: text, anchor: captureAnchor(text) }
           render()
         }, 250)
       }
@@ -812,10 +804,7 @@ window.__ModuleLoader__.load({
 
       function onKeyDown(e) {
         if (e.key === 'Escape') {
-          if (ui.mode !== 'closed') {
-            ui.pendingCapture = null // PATCH(2026-08-14): Esc = 明确放弃待消费的选区引用
-            closeToolbar()
-          }
+          if (ui.mode !== 'closed') closeToolbar()
           return
         }
         // 【回车随输入框发送】在 composer 里按 Enter（且已收集批注、非输入法合成）：
@@ -823,43 +812,12 @@ window.__ModuleLoader__.load({
         // 批注清单 + 用户输入的问题。用户始终看不到文本被塞进去。
         // IME 铁律（v1.3.10 修了 nativeEvent.keyCode；v1.3.11 补 compositionend
         // 后 Enter keyCode=13 的时序洞）：合成期 / 上屏确认 Enter 绝不能 setDraft。
-        // PATCH(2026-08-14): 回车前先尝试 Codex 式自动捕获选区（选中即引用），
-        // 再按既有逻辑附带批注清单。
-        if (e.key === 'Enter' && !isImeKeyBlocked(e)) {
+        if (e.key === 'Enter' && ui.quotes.length > 0 && !isImeKeyBlocked(e)) {
           var ta = e.target
           if (ta instanceof HTMLTextAreaElement && ta.closest && ta.closest('[data-composer-card]') !== null) {
-            maybeCaptureSelection()
-            if (ui.quotes.length > 0) attachAndSend()
+            attachAndSend()
           }
         }
-      }
-
-      /** PATCH(2026-08-14): Codex 式「选中即引用」。
-       *  消费 settle 阶段暂存的选区快照（ui.pendingCapture）：composer 回车时
-       *  若存在未入清单的助手消息选区文本，自动入清单为纯引用（note 留空），
-       *  随后随消息发送。焦点已移到输入框时 getSelection 不可靠，故用暂存快照。 */
-      function maybeCaptureSelection() {
-        var pc = ui.pendingCapture
-        if (pc === null || pc.text === '') return
-        if (ui.mode === 'editing' || ui.mode === 'composing') return
-        // 与 render 的 already 一致：同文本已在清单中则不重复捕获。
-        if (ui.quotes.some(function (q) { return q.text === pc.text })) return
-        var a = pc.anchor || { range: null, seqKey: '', rowHead: '', textOffset: -1, ctxBefore: '', ctxAfter: '' }
-        ui.quotes.push({
-          id: 'q-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
-          text: pc.text,
-          note: '',
-          range: a.range,
-          seqKey: a.seqKey,
-          rowHead: a.rowHead,
-          textOffset: a.textOffset,
-          ctxBefore: a.ctxBefore,
-          ctxAfter: a.ctxAfter,
-        })
-        ui.pendingCapture = null
-        updateChip()
-        renderMarkers()
-        console.log('[annotation] Codex 式自动引用（空批注）：' + pc.text.slice(0, 40) + '…')
       }
       // capture 阶段：必须先于 composer 自己的 Enter 处理（React 在容器层冒泡
       // 提交）——否则等我们执行时消息已提交，拼稿永远太迟。
@@ -897,10 +855,19 @@ window.__ModuleLoader__.load({
           bar.style.left = ui.pos.left + 'px'
           bar.style.top = ui.pos.top + 'px'
           var already = ui.quotes.some(function (q) { return q.text === ui.quote })
+          // PATCH(2026-08-14): Codex 式「引用」按钮——一键把选中文字入清单为
+          // 纯引用（空批注），显式确认制，杜绝"复制/阅读选中"导致的幽灵引用。
           bar.appendChild(ghostButton(
             already ? null : ICONS.plus,
-            already ? '已批注' : '批注',
-            already ? '这段内容已在批注清单中' : '为选中的内容写一条批注',
+            already ? '已引用' : '引用',
+            already ? '这段内容已在批注清单中' : '将选中的内容作为引用随消息发送（无需写批注）',
+            already,
+            quickQuote,
+          ))
+          bar.appendChild(ghostButton(
+            null,
+            '批注',
+            '为选中的内容写一条批注',
             already,
             enterEditing,
           ))
@@ -1105,6 +1072,32 @@ window.__ModuleLoader__.load({
         return anchor
       }
 
+      /** PATCH(2026-08-14): Codex 式「引用」——选中文字一键入清单为纯引用（空批注），
+       *  随后回车随消息发送。显式确认制：复制/阅读选中等误选中不会自动成为引用。 */
+      function quickQuote() {
+        var text = ui.quote
+        if (text === '') { ui.error = '没有选中的内容'; render(); return }
+        if (ui.quotes.some(function (q) { return q.text === text })) return
+        var a = captureAnchor(text)
+        ui.quotes.push({
+          id: 'q-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+          text: text,
+          note: '',
+          range: a.range,
+          seqKey: a.seqKey,
+          rowHead: a.rowHead,
+          textOffset: a.textOffset,
+          ctxBefore: a.ctxBefore,
+          ctxAfter: a.ctxAfter,
+        })
+        ui.pendingAnchor = null
+        closeToolbar()
+        updateChip()
+        renderMarkers()
+        focusComposer()
+        console.log('[annotation] 已引用（空批注）：' + text.slice(0, 40) + '…')
+      }
+
       function enterEditing() {
         ui.mode = 'editing'
         ui.noteDraft = ''
@@ -1165,7 +1158,6 @@ window.__ModuleLoader__.load({
           // 导致"没选中也附带旧批注"的幽灵引用）。草稿中的批注块即已交付的引用，
           // 防重复拼稿由 draft.indexOf('我批注了以下') 兜底。
           ui.quotes = []
-          ui.pendingCapture = null
           updateChip()
           renderMarkers()
           console.log('[annotation] 批注块已拼入草稿，回车将随消息发送（' + sentCount + ' 条）')
