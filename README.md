@@ -20,8 +20,6 @@
 | `video-notes-generator` | 视频 URL → 结构化 Markdown 笔记（时间戳 / 抽取帧 / 多模态图像观察 / AI 总结），支持 Bilibili / YouTube / 抖音 / 快手 / 本地文件 | Python 3 + 依赖（见 `scripts/install_deps.sh`） |
 | `ppt-master` | 源文档（PDF / DOCX / URL / Markdown）→ 多角色协作生成 SVG 页面 → 导出 PPTX | Python 3（标准库为主，可选依赖见 `requirements.txt`） |
 | `markitdown-skill` | 微软 MarkItDown：PDF / DOCX / PPTX / XLSX / HTML / EPUB 等 → 统一 Markdown | Python 3 + `pip install -r requirements.txt` |
-| `ericwarn-dingning-pr-methodology` | 丁宁市赚率（PR）估值方法论：PE/PB/ROE、PR 三公式、股息率修正、0.4/0.5/0.6PR 买入区间、A/H 税差、红利 ETF 轮动、巴菲特案例复盘 | 无（纯方法论/规则） |
-| `fox-finance-methodology` | B 站 40 视频语料提炼的技术分析方法论：K 线 / 均线 / EMA 隧道 / KDJ / MACD / 布林 / 斐波那契 / 量价验证 / 风控否决 | 无（纯方法论/规则） |
 | `generic-agent-code-run` | GenericAgent 风格 `code_run`：Windows 桌面应用 / 真实浏览器自动化（Win32 / UIA / OCR / 截图 / CDP）+ 观察-行动-验证循环 | Python 3 + 对应库 |
 
 > 所有技能均内置 `SKILL.md`（agent 运行时加载的指令），部分附 `scripts/`、`templates/`、`references/`。
@@ -50,8 +48,6 @@ Agent_Extensions/
 │   ├── video-notes-generator/ # 视频转结构化笔记
 │   ├── ppt-master/            # 文档 → SVG → PPTX
 │   ├── markitdown-skill/      # 任意文档 → Markdown
-│   ├── ericwarn-dingning-pr-methodology/  # 市赚率(PR)估值方法论
-│   ├── fox-finance-methodology/           # 技术分析方法论
 │   └── generic-agent-code-run/ # Windows 桌面/浏览器自动化
 ├── dsh-plugins/               # DeepSeek Harness（DSH）原生插件
 │   ├── dsh-vision-skill/      # 识图插件 v2.1（7 工具 + 渐进式暴露 + Credential 化）
@@ -138,8 +134,7 @@ VISION_API_KEY: sk-xxxx
 
 | 使用场景 | 要求 |
 |---|---|
-| 通用技能（纯方法论类） | 无，挂载即用 |
-| 通用技能（脚本类：vision / video / ppt / markitdown / automation） | Python 3.x + 各技能列出的 pip 依赖 |
+| 通用技能（vision / video / ppt / markitdown / automation） | Python 3.x + 各技能列出的 pip 依赖 |
 | DSH 插件 | Node.js + DSH（`@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-credentials`） |
 | dsh-vision-skill / vision-skill | 额外需要 Python 3 + Pillow，以及**任意 OpenAI 兼容多模态模型** API Key（Qwen-VL / MiniMax-M3 / Gemini / GPT-4o，默认 MiniMax-M3） |
 | Hermes 插件 | Hermes 框架 |
