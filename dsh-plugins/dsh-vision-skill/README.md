@@ -51,8 +51,9 @@ dsh-vision-skill/
 git clone https://github.com/DDDFXYqiming/Agent_Extensions.git
 cd Agent_Extensions\dsh-plugins\dsh-vision-skill
 
-# 2. 安装依赖（dsh-tools / dsh-credentials 从 registry 或 link 全局）
-pnpm add "@deepseek-ai/dsh-tools@rc" "@deepseek-ai/dsh-credentials@rc"
+# 2. （可选）本地开发依赖：peer 包由 DSH 自带（dsh-base 提供 @deepseek-ai/dsh-tools 等），
+#    无需在插件目录单独安装；若脚本独立运行需要类型/工具，可临时加：
+#    pnpm add -D "@deepseek-ai/dsh-tools@rc" "@deepseek-ai/dsh-credentials@rc"
 
 # 3. 注册到 web profile（link 方式，改源码即时生效）
 #    在 C:\Users\<user>\.dsh\profiles\web\package.json 的 dependencies 加：
@@ -130,7 +131,8 @@ powershell -File scripts\reapply-pi-ai-vision-patch.ps1
 # 然后重启 DSH 宿主生效
 ```
 
-- 补丁内容：给 `dsh-llm-pi-ai/lib/index.js` 增加 `blockToTextPi`（占位符格式与官方 `dsh-llm-deepseek` 完全一致，保证 vision 工作流格式统一）
+- 补丁内容：给 `dsh-llm-pi-ai/lib/index.js` 打两处补丁——`zen-ua`（OpenCode Zen 免费层只认 `opencode/<ver>` User-Agent）+ `image→path`（图片转路径占位符，格式与官方 `dsh-llm-deepseek` 完全一致，保证 vision 工作流格式统一）
+- ⚠️ **该脚本是作者机器级维护工具**（硬编码本机 `.dsh/profiles` 路径，改的是 node_modules 里的 vendor 包），**随包分发时已从 files 白名单排除**；他机使用需先修改脚本顶部的 `$piAi` 路径
 - **dsh 升级后需重跑脚本**（node_modules 被覆盖）；改 `lib/index.js` 后需重启宿主
 - 补丁只影响 pi-ai 适配器的纯文本模型（`input` 不含 image）；真正多模态的模型不受影响
 
@@ -150,4 +152,5 @@ OCR 这张图 <路径>          → vision_ocr
 
 - 脚本独立运行：见 `templates/.env.example`，`python scripts/vision.py <图> --check`
 - 通用技能源：[General_skills/vision-skill](../../General_skills/vision-skill)
+- ⚠️ **同名技能冲突**：本插件以 `runtime` 层注册技能名 `vision`；若同时在 `$DSH_HOME/skills`（user 层）或项目 `.dsh/skills`（project 层）安装了同名技能，按官方优先级 project > runtime > user，可能互相遮蔽——建议二选一安装
 - 授权：MIT

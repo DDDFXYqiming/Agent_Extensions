@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { type BrowserEntry, type Preview } from './protocol.ts';
+import { type BrowserEntry, type Preview } from './protocol.js'; // [spec-audit 2026-08-14] '.ts' → '.js'：包内只有 .d.ts（TS2307 修复）
 interface HostContext {
     sessions: SessionLookup;
     webServer: {
@@ -9,7 +9,8 @@ interface HostContext {
             handler(req: IncomingMessage, res: ServerResponse): Promise<void>;
         }): () => void;
     };
-    on(name: never, listener: never): void;
+    // [spec-audit 2026-08-14] 放宽伪造的 never 签名：声明为通用事件形状（真实签名由宿主类型声明合并提供）
+    on(name: string, listener: (...args: any[]) => void): void;
     effect(callback: () => (() => void), label?: string): void;
 }
 export interface Config {
@@ -35,7 +36,8 @@ type SessionRecord = {
     };
 };
 type SessionLookup = {
-    get(id: never): SessionRecord | undefined;
+    // [spec-audit 2026-08-14] 修正伪造签名：会话 id 为 string
+    get(id: string): SessionRecord | undefined;
 };
 export declare function apply(ctx: HostContext, config?: Config): void;
 export { inside, list, preview, search };

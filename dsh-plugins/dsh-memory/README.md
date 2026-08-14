@@ -79,5 +79,5 @@ dsh plugin --profile web add E:\AI_Projects\dsh-plugins\dsh-memory
 
 ## 相关
 
-- 底层接缝：`ctx.systemPrompt.context` / `ctx.skills.register` / `ctx.tools.register` / `turn/end` 事件 + `agent.inject`（全部官方 API，零框架补丁）
+- 底层接缝：`ctx.systemPrompt.context` / `ctx.skills.register` / `ctx.tools.register` / `session/event` 事件（`event.type === "turn/end"`，按官方 events.md 观察持久化会话事件）+ `agent.inject`（全部官方 API，零框架补丁）
 - 授权：MIT

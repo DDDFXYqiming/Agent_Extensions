@@ -2,6 +2,9 @@ import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { dirname, extname, relative, resolve, sep } from "node:path";
+// [spec-audit 2026-08-14] Schemastery 配置系统：加载期校验 + 默认值填充（config.md），
+// 与 cordis.patch.yml 解耦——默认值单一来源（schema），用户覆盖仍走 bundle config。
+import Schema from "@deepseek-ai/schemastery";
 //#region lib/types/protocol.js
 const FILE_BROWSER_ROUTE = "/side-panel/api";
 //#endregion
@@ -55,7 +58,16 @@ async function search(root, input, limit) {
 	const matches = [];
 	const pending = [""];
 	let truncated = false;
+	// [spec-audit 2026-08-14] 遍历节点预算：防止巨型目录树（如整个磁盘）无限遍历
+	const NODE_BUDGET = 50000;
+	let visited = 0;
 	while (pending.length > 0) {
+		if (visited >= NODE_BUDGET) {
+			truncated = true;
+			pending.length = 0;
+			break;
+		}
+		visited++;
 		const directory = pending.pop() ?? "";
 		let children;
 		try {
@@ -203,6 +215,13 @@ async function workspaceDiff(root) {
 	}
 	return diff;
 }
+// [spec-audit 2026-08-14] 官方配置约定：导出 Schemastery Config——默认值单一来源，
+// 加载期校验 + 默认值填充（cordis.patch.yml 不再写默认值，见 basic/config.md）
+export const Config = Schema.object({
+	maxTextBytes: Schema.number().default(2097152),
+	maxImageBytes: Schema.number().default(10485760),
+	searchMaxResults: Schema.number().default(200)
+});
 function apply(ctx, config = {}) {
 	const maxText = config.maxTextBytes ?? 2097152;
 	const maxImage = config.maxImageBytes ?? 10485760;
@@ -231,6 +250,17 @@ function apply(ctx, config = {}) {
 			path: FILE_BROWSER_ROUTE,
 			handler: async (req, res) => {
 				try {
+					// [spec-audit 2026-08-14] 本机服务安全：校验 Host/Origin 仅限本机回环地址。
+					// 该端点提供任意文件读写 + 命令执行，绝不能接受跨源调用（浏览器跨站请求 /
+					// 恶意页面 fetch），也不接受非本机来源的直连。
+					const host = String(req.headers.host ?? "").toLowerCase();
+					if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host)) {
+						return json(res, 403, { ok: false, error: "forbidden host" });
+					}
+					const origin = String(req.headers.origin ?? "").toLowerCase();
+					if (origin !== "" && !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(origin)) {
+						return json(res, 403, { ok: false, error: "forbidden origin" });
+					}
 					const url = new URL(req.url ?? "/side-panel/api", "http://localhost");
 					const body = req.method === "POST" ? await requestBody(req) : {};
 					const sessionId = typeof body.sessionId === "string" ? body.sessionId : url.searchParams.get("sessionId");
@@ -469,17 +499,19 @@ function apply(ctx, config = {}) {
 							},
 							stdio: "pipe"
 						});
-						// PATCH(2026-08-14): spawn 失败（ENOENT 等）必须处理，否则
-						// unhandled 'error' 事件直接击穿宿主进程。
-						terminal.on("error", () => {
-							record.exited = true;
-						});
+						// [spec-audit 2026-08-14] record 声明提前：消除 terminal.on("error") 闭包 TDZ
+						// （原代码在 record 声明前引用它，spawn 同步抛错路径下会 ReferenceError）
 						const record = {
 							owner: sessionId,
 							process: terminal,
 							chunks: [],
 							exited: false
 						};
+						// PATCH(2026-08-14): spawn 失败（ENOENT 等）必须处理，否则
+						// unhandled 'error' 事件直接击穿宿主进程。
+						terminal.on("error", () => {
+							record.exited = true;
+						});
 						terminal.stdout.on("data", (chunk) => record.chunks.push(String(chunk)));
 						terminal.stderr.on("data", (chunk) => record.chunks.push(String(chunk)));
 						terminal.on("exit", () => {

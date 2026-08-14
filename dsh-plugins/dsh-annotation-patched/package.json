@@ -14,7 +14,6 @@
     "client.js",
     "cordis.patch.yml",
     "README.md",
-    "README.zh-CN.md",
     "LICENSE"
   ],
   "scripts": {
@@ -24,9 +23,19 @@
   "publishConfig": {
     "access": "public"
   },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugins",
+    "annotation",
+    "quote",
+    "selection",
+    "web"
+  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/omdsh-dev/dsh-annotation.git"
+    "url": "git+https://github.com/DDDFXYqiming/Agent_Extensions.git",
+    "directory": "dsh-plugins/dsh-annotation-patched"
   },
   "dsh": {
     "bundle": {
@@ -38,6 +47,18 @@
         "@deepseek-ai/dsh-client-ui-conversation"
       ],
       "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-runtime": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-conversation": {
+      "optional": true
     }
   },
   "license": "MIT",

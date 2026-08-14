@@ -26,7 +26,9 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import Schema from "@deepseek-ai/schemastery";
 
 const name = "memory";
-const inject = ["skills", "tools", "systemPrompt", "agents"];
+// [spec-audit 2026-08-14] systemPrompt/agents 改为可选依赖：不声明 inject，
+// apply 内用 ctx.get() 按需查询（framework/service.md：可选=省略 inject 用 ctx.get）。
+const inject = ["skills", "tools"];
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
 const SKILL_MD = join(PLUGIN_DIR, "..", "SKILL.md");
@@ -35,7 +37,8 @@ const SKILL_MD = join(PLUGIN_DIR, "..", "SKILL.md");
 export const Config = Schema.object({
 	memoryDir: Schema.string().default(""),
 	maxIndexLines: Schema.number().default(30),
-	progressive: Schema.union([Schema.boolean(), Schema.string()]).default(true),
+	// [spec-audit 2026-08-14] 纯 boolean：非法配置在加载期响亮失败（config.md §Fail loudly）
+	progressive: Schema.boolean().default(true),
 });
 
 const L0_TEMPLATE = `# Memory Management SOP (L0)
@@ -208,6 +211,13 @@ function upsertFact(memDir, topic, content) {
 	return "created";
 }
 
+/** 记忆名称安全校验：拒绝绝对路径与任何 ".." 路径段（防记忆目录穿越，spec-audit 2026-08-14）。 */
+function isSafeMemName(value) {
+	if (/^[a-zA-Z]:[\\/]/.test(value)) return false;
+	if (value.split(/[\\/]/).includes("..")) return false;
+	return true;
+}
+
 /** 读取 facts.md 的指定 section。 */
 function readFact(memDir, topic) {
 	const text = existsSync(join(memDir, "facts.md")) ? readFileSync(join(memDir, "facts.md"), "utf8") : "";
@@ -238,7 +248,7 @@ async function apply(ctx, config = {}) {
 	const cfg = {
 		memoryDir: config.memoryDir || defaultMemDir(),
 		maxIndexLines: config.maxIndexLines ?? 30,
-		progressive: config.progressive !== false && config.progressive !== "false",
+		progressive: config.progressive !== false,
 	};
 	ensureMemoryLayout(cfg.memoryDir);
 	ensureIndexRule(cfg.memoryDir);
@@ -247,8 +257,10 @@ async function apply(ctx, config = {}) {
 	const agentStates = new Map();
 
 	// ── 记忆注入（L1 存在性索引每轮可见，缓存友好：快照追加式）──
-	if (ctx.systemPrompt) {
-		disposers.push(ctx.systemPrompt.context({
+	// [spec-audit 2026-08-14] systemPrompt 为可选服务：ctx.get() 查询，缺失时跳过
+	const sysPrompt = ctx.get("systemPrompt");
+	if (sysPrompt) {
+		disposers.push(sysPrompt.context({
 			name: "memory:index",
 			order: 10,
 			text: () => {
@@ -258,24 +270,31 @@ async function apply(ctx, config = {}) {
 		}));
 	}
 
-	// ── 周期记忆提醒（GA 每 10 轮刷新/提示的等价物：按 agent 独立计数，inject 轻量通知）──
+	// ── 周期记忆提醒（GA 的 start_long_term_update 等价物：按会话维度计数，官方事件）──
+	// [spec-audit 2026-08-14] 修复：'turn/end' 是持久化会话事件类型而非 Cordis 事件，
+	// 官方观察方式是监听 session/event 并检查 event.type（events.md §Cordis 事件与会话记录）。
+	// agent 与 session 共享 id（dsh-agent AgentRegistry.get(id) 按共享 agent/session id 查找），
+	// 由 agents 服务反查活跃 agent 再 inject 提醒。
 	const turnCounters = new Map();
-	disposers.push(ctx.on("turn/end", ({ agent }) => {
-		if (!agent || typeof agent.inject !== "function") return undefined;
-		const id = String(agent.id);
+	const agentsService = ctx.get("agents");
+	disposers.push(ctx.on("session/event", (session, event) => {
+		if (!event || event.type !== "turn/end") return undefined;
+		const id = String(session?.id ?? "");
+		if (!id) return undefined;
 		const n = (turnCounters.get(id) ?? 0) + 1;
 		turnCounters.set(id, n);
-		if (n % 10 === 0) {
-			try {
-				agent.inject({
-					content: [{
-						type: "text",
-						text: "[记忆检查] 已完成 10 轮。本任务是否产生了【行动验证成功】且未来可复用的经验？若有请用 memory_write 沉淀（须带 evidence）；若无则忽略本提醒。"
-					}],
-					source: { kind: "plugin", plugin: "memory" }
-				});
-			} catch { /* agent 已 dispose 时忽略 */ }
-		}
+		if (n % 10 !== 0) return undefined;
+		const agent = agentsService?.get?.(id);
+		if (!agent || typeof agent.inject !== "function") return undefined;
+		try {
+			agent.inject({
+				content: [{
+					type: "text",
+					text: "[记忆检查] 已完成 10 轮。本任务是否产生了【行动验证成功】且未来可复用的经验？若有请用 memory_write 沉淀（须带 evidence）；若无则忽略本提醒。"
+				}],
+				source: { kind: "plugin", plugin: "memory" }
+			});
+		} catch { /* agent 已 dispose 时忽略 */ }
 		return undefined;
 	}));
 	// agent 销毁时清理轮次计数（防 Map 无限增长）
@@ -285,12 +304,14 @@ async function apply(ctx, config = {}) {
 	}));
 
 	// ── 运行时 skill（触发语义见 SKILL.md）──
+	// [spec-audit 2026-08-14] 注册前剥离 frontmatter（provider 加载技能时会剥离，
+	// 运行时注册保持一致，避免模型看到重复的 name/description 元数据）
 	ctx.skills.register({
 		name: "memory",
 		description: "跨会话长期记忆：读写经验 SOP 与环境事实。当任务涉及本机环境、工具配置、以前踩过的坑，或任务完成发现值得沉淀的验证经验时使用。",
 		whenToUse: "新任务开始时需要历史经验/环境事实；任务完成且存在行动验证成功、未来可复用的信息（写入）；记忆索引需要同步",
 		source: "runtime",
-		content: readFileSync(SKILL_MD, "utf8")
+		content: readFileSync(SKILL_MD, "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
 	});
 
 	// ── 工具定义 ──
@@ -324,6 +345,10 @@ async function apply(ctx, config = {}) {
 		},
 		async execute(args) {
 			const key = String(args.name).trim();
+			// [spec-audit 2026-08-14] 路径穿越防护：拒绝绝对路径/盘符与 ".." 段
+			if (!isSafeMemName(key)) {
+				throw new Error(`memory_read: 非法名称（不允许路径穿越/绝对路径）: ${key}`);
+			}
 			const lower = key.toLowerCase();
 			if (lower === "index" || lower === "l1" || lower === "索引") {
 				bumpAccess(cfg.memoryDir, "index");
@@ -533,7 +558,10 @@ async function apply(ctx, config = {}) {
 		}
 	};
 
-	const progressive = cfg.progressive && Boolean(ctx.agents);
+	// [spec-audit 2026-08-14] agents 为可选服务（inject 已移除）：ctx.get() 查询，
+	// 缺失时退化为全局注册（与代码意图一致，死分支消除）
+	const agents = ctx.get("agents");
+	const progressive = cfg.progressive && Boolean(agents);
 	if (progressive) {
 		ctx.tools.register(defineTool({
 			name: "memory_activate",
@@ -556,7 +584,6 @@ async function apply(ctx, config = {}) {
 			},
 			presentCall: () => ({ card: "generic", title: "激活记忆工具", kind: "execute" })
 		}));
-		disposers.push(ctx.on("agent/created", () => { /* 等 skill 加载 */ }));
 		disposers.push(ctx.on("agent/disposed", ({ agent }) => detach(agent)));
 		disposers.push(ctx.on("tools/result", (exec, result) => {
 			if (!result.isError
