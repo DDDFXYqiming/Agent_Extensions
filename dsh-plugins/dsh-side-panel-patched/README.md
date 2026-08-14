@@ -64,6 +64,13 @@ hover/拖动时显示纯线性梭形（菱形 `clip-path: polygon(50% 0,0% 50%,5
 # "@dsh-external/dsh-side-panel": "link:C:/Users/39795/Agent_Extensions/dsh-plugins/dsh-side-panel-patched"
 ```
 
+## 发布形态（2026-08-14 起）
+
+- 本包**只分发预构建产物**（`lib/` 是构建输出，仓库无 `src/`/`tsconfig.json`）——`prepare` 脚本仅做产物存在性自检，`npm pack` / GitHub 安装均可通过（publish.md 兼容路径）
+- scoped 包已配置 `publishConfig.access: public`；所有前端依赖（codemirror/xterm 等）已内联进 bundle，声明于 `devDependencies`（构建期使用）
+- 配置默认值由插件内 Schemastery `Config` 提供（`maxTextBytes` / `maxImageBytes` / `searchMaxResults`），`cordis.patch.yml` 不再携带默认值
+- `/side-panel/api` 已加 Host/Origin 回环校验（仅接受 `127.0.0.1` / `localhost` / `[::1]` 来源）
+
 ## 已知边界
 
 - 终端功能 Windows 不可用（Unix PTY 限制，需作者改用 ConPTY/node-pty）

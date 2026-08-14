@@ -22,7 +22,9 @@ import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import Schema from "@deepseek-ai/schemastery";
 
 const name = "vision-skill";
-const inject = ["skills", "tools", "credentials", "agents"];
+// [spec-audit 2026-08-14] credentials/agents 改为可选依赖：不声明 inject，
+// apply 内用 ctx.get() 按需查询（framework/service.md：可选=省略 inject 用 ctx.get）
+const inject = ["skills", "tools"];
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
 const SKILL_MD = join(PLUGIN_DIR, "..", "SKILL.md");
@@ -40,8 +42,10 @@ export const Config = Schema.object({
 	python: Schema.string().default("python"),
 	pwsh: Schema.string().default("powershell.exe"),
 	timeoutMs: Schema.number().default(180000),
-	concurrency: Schema.number().default(2),
-	progressive: Schema.union([Schema.boolean(), Schema.string()]).default(true),
+	// [spec-audit 2026-08-14] 边界写入 schema：非法配置在加载期响亮失败，删除运行期静默钳制
+	concurrency: Schema.number().min(1).max(8).default(2),
+	// [spec-audit 2026-08-14] 纯 boolean：不再容忍字符串 'false'
+	progressive: Schema.boolean().default(true),
 	allowedDirs: Schema.array(Schema.string()).default([]),
 });
 
@@ -68,8 +72,9 @@ function resolveConfig(config = {}) {
 		python: config.python ?? DEFAULTS.python,
 		pwsh: config.pwsh ?? DEFAULTS.pwsh,
 		timeoutMs: config.timeoutMs ?? DEFAULTS.timeoutMs,
-		concurrency: Math.max(1, Math.min(8, config.concurrency ?? DEFAULTS.concurrency)),
-		progressive: config.progressive !== false && config.progressive !== "false",
+		// [spec-audit 2026-08-14] schema 已限 1..8，此处不再静默钳制
+		concurrency: config.concurrency ?? DEFAULTS.concurrency,
+		progressive: config.progressive !== false,
 		allowedDirs: Array.isArray(config.allowedDirs) ? config.allowedDirs : [],
 	};
 }
@@ -96,16 +101,21 @@ class Semaphore {
 	}
 }
 
-/** 子进程运行（stdout/stderr 按 UTF-8 收集，非零退出码抛错，支持超时）。 */
+/** 子进程运行（stdout/stderr 按 UTF-8 收集，非零退出码抛错，支持超时与取消）。
+ * [spec-audit 2026-08-14] 转发 exec.signal：上层取消回合时中止子进程（tools 执行契约）。 */
 function run(command, args, options) {
 	return new Promise((resolvePromise, reject) => {
 		execFile(command, args, {
 			encoding: "utf8",
 			maxBuffer: 16 * 1024 * 1024,
 			timeout: options.timeoutMs ?? 180000,
-			...options,
+			signal: options.signal,
 		}, (error, stdout, stderr) => {
 			if (error) {
+				if (options.signal?.aborted) {
+					reject(new Error(`${command} 已被取消`));
+					return;
+				}
 				const detail = (stderr ?? "").trim() || String(error.message);
 				reject(new Error(`${command} 失败: ${detail}`));
 				return;
@@ -115,12 +125,14 @@ function run(command, args, options) {
 	});
 }
 
-/** 密钥解析：config.apiKey 优先；否则按操作解析 DSH Credential；最后看环境变量。 */
+/** 密钥解析：config.apiKey 优先；否则按操作解析 DSH Credential；最后看环境变量。
+ * [spec-audit 2026-08-14] credentials 为可选服务：ctx.get() 查询，缺失时跳过。 */
 async function resolveApiKey(ctx, cfg) {
 	if (cfg.apiKey) return cfg.apiKey;
+	const creds = ctx.get("credentials");
 	try {
-		if (ctx.credentials) {
-			const hit = await ctx.credentials.resolve(credentialRef(cfg.credential));
+		if (creds) {
+			const hit = await creds.resolve(credentialRef(cfg.credential));
 			if (hit && hit.value) return hit.value;
 		}
 	} catch {
@@ -205,7 +217,7 @@ function visionParams() {
 }
 
 /** 调打包的 vision.py 识别一张图片，返回文字描述（核心方法不变）。 */
-async function runVision(ctx, cfg, sem, imagePath, { mode = "general", prompt, crop, budget = "normal" }) {
+async function runVision(ctx, cfg, sem, imagePath, { mode = "general", prompt, crop, budget = "normal" }, signal) {
 	const apiKey = await resolveApiKey(ctx, cfg);
 	if (!apiKey) throw new Error("vision-skill: 未配置 apiKey（插件 config 的 apiKey、credential 引用或 VISION_API_KEY 环境变量）");
 	const args = [VISION_PY, imagePath];
@@ -223,7 +235,8 @@ async function runVision(ctx, cfg, sem, imagePath, { mode = "general", prompt, c
 				VISION_MODEL: cfg.model,
 				VISION_API_KEY: apiKey
 			},
-			timeoutMs: cfg.timeoutMs
+			timeoutMs: cfg.timeoutMs,
+			signal
 		});
 		const text = stdout.trim();
 		if (!text) throw new Error(`vision.py 无输出${stderr ? `: ${stderr.trim()}` : ""}`);
@@ -234,7 +247,7 @@ async function runVision(ctx, cfg, sem, imagePath, { mode = "general", prompt, c
 }
 
 /** 调 vision.py 定位（grounding）：返回结构化匹配（label + 像素/归一化 bbox）。 */
-async function runGround(ctx, cfg, sem, imagePath, target, { crop, budget = "normal", output } = {}) {
+async function runGround(ctx, cfg, sem, imagePath, target, { crop, budget = "normal", output } = {}, signal) {
 	const apiKey = await resolveApiKey(ctx, cfg);
 	if (!apiKey) throw new Error("vision-skill: 未配置 apiKey（插件 config 的 apiKey、credential 引用或 VISION_API_KEY 环境变量）");
 	if (!target || typeof target !== "string") {
@@ -254,7 +267,8 @@ async function runGround(ctx, cfg, sem, imagePath, target, { crop, budget = "nor
 				VISION_MODEL: cfg.model,
 				VISION_API_KEY: apiKey
 			},
-			timeoutMs: cfg.timeoutMs
+			timeoutMs: cfg.timeoutMs,
+			signal
 		});
 		const text = stdout.trim();
 		if (!text) throw new Error(`vision.py 无输出${stderr ? `: ${stderr.trim()}` : ""}`);
@@ -272,7 +286,7 @@ async function runGround(ctx, cfg, sem, imagePath, target, { crop, budget = "nor
 }
 
 /** 通用：跑 vision.py 并解析 stdout 为 JSON（供 detect/colors/long_ocr 复用）。 */
-async function runJsonScript(ctx, cfg, sem, args, { needKey = true } = {}) {
+async function runJsonScript(ctx, cfg, sem, args, { needKey = true, signal } = {}) {
 	let apiKey = "";
 	if (needKey) {
 		apiKey = await resolveApiKey(ctx, cfg);
@@ -288,7 +302,8 @@ async function runJsonScript(ctx, cfg, sem, args, { needKey = true } = {}) {
 				VISION_MODEL: cfg.model,
 				VISION_API_KEY: apiKey
 			},
-			timeoutMs: cfg.timeoutMs
+			timeoutMs: cfg.timeoutMs,
+			signal
 		});
 		const text = stdout.trim();
 		if (!text) throw new Error(`vision.py 无输出${stderr ? `: ${stderr.trim()}` : ""}`);
@@ -305,32 +320,32 @@ async function runJsonScript(ctx, cfg, sem, args, { needKey = true } = {}) {
 }
 
 /** 枚举元素（detect）：与 grounding 同源，提示词改为枚举一类元素。 */
-async function runDetect(ctx, cfg, sem, imagePath, category, { crop, budget = "normal", output } = {}) {
+async function runDetect(ctx, cfg, sem, imagePath, category, { crop, budget = "normal", output } = {}, signal) {
 	const args = [imagePath, "--detect"];
 	if (category) args.push(category);
 	if (crop) args.push("--crop", crop);
 	if (budget) args.push("--budget", budget);
 	if (output) args.push("--draw", output);
-	return runJsonScript(ctx, cfg, sem, args);
+	return runJsonScript(ctx, cfg, sem, args, { signal });
 }
 
 /** 主色分析（本地算法，无需视觉 API）。 */
-async function runColors(ctx, cfg, sem, imagePath, { region, top = 8 } = {}) {
+async function runColors(ctx, cfg, sem, imagePath, { region, top = 8 } = {}, signal) {
 	const args = [imagePath, "--colors", String(top)];
 	if (region) args.push("--crop", region);
-	return runJsonScript(ctx, cfg, sem, args, { needKey: false });
+	return runJsonScript(ctx, cfg, sem, args, { needKey: false, signal });
 }
 
 /** 长截图分块 OCR。 */
-async function runLongOcr(ctx, cfg, sem, imagePath, { targetHeight = 2000, overlap = 100, budget = "normal", prompt } = {}) {
+async function runLongOcr(ctx, cfg, sem, imagePath, { targetHeight = 2000, overlap = 100, budget = "normal", prompt } = {}, signal) {
 	const args = [imagePath, "--long-ocr", "--target-height", String(targetHeight), "--overlap", String(overlap)];
 	if (budget) args.push("--budget", budget);
 	if (prompt) args.push("--prompt", prompt);
-	return runJsonScript(ctx, cfg, sem, args);
+	return runJsonScript(ctx, cfg, sem, args, { signal });
 }
 
 /** 用 Windows PowerShell 5.1（STA + WinForms）把剪贴板图片保存为 PNG。 */
-async function saveClipboardImage(cfg, dest) {
+async function saveClipboardImage(cfg, dest, signal) {
 	const escaped = dest.replace(/'/g, "''");
 	const script = [
 		"Add-Type -AssemblyName System.Windows.Forms",
@@ -342,7 +357,8 @@ async function saveClipboardImage(cfg, dest) {
 	].join("; ");
 	const { stderr } = await run(cfg.pwsh, ["-NoProfile", "-NonInteractive", "-Command", script], {
 		env: process.env,
-		timeoutMs: 60000
+		timeoutMs: 60000,
+		signal
 	});
 	if (stderr.includes("CLIPBOARD_NO_IMAGE")) throw new Error("vision-skill: 剪贴板里没有图片（先复制/截屏一张图片到剪贴板）");
 }
@@ -386,6 +402,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 			},
 			render: (_args, value) => [{ type: "text", text: value.text }]
 		},
+		timeoutMs: cfg.timeoutMs,
 		async execute(args, exec) {
 			const workspace = sessionWorkspace(exec);
 			const imagePath = resolveImagePath(workspace, cfg.allowedDirs, args.image_path);
@@ -394,7 +411,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 				prompt: args.prompt,
 				crop: args.crop,
 				budget: args.budget ?? "normal"
-			});
+			}, exec.signal);
 			return { text, mode: args.mode ?? "general", image_info: imageInfo };
 		},
 		presentCall(args) {
@@ -451,6 +468,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 			},
 			render: (_args, value) => [{ type: "text", text: value.text }]
 		},
+		timeoutMs: cfg.timeoutMs,
 		async execute(args, exec) {
 			const workspace = sessionWorkspace(exec);
 			const imagePath = resolveImagePath(workspace, cfg.allowedDirs, args.image_path);
@@ -459,7 +477,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 				prompt: args.prompt,
 				crop: args.crop,
 				budget: args.budget ?? "normal"
-			});
+			}, exec.signal);
 			return { text, mode: "ocr", image_info: imageInfo };
 		},
 		presentCall(args) {
@@ -533,6 +551,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 				return [{ type: "text", text: `定位「${value.target}」共 ${value.matches.length} 处：\n${lines.join("\n")}` }];
 			}
 		},
+		timeoutMs: cfg.timeoutMs,
 		async execute(args, exec) {
 			const workspace = sessionWorkspace(exec);
 			const imagePath = resolveImagePath(workspace, cfg.allowedDirs, args.image_path);
@@ -546,7 +565,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 				crop: args.crop,
 				budget: args.budget ?? "normal",
 				output
-			});
+			}, exec.signal);
 			const { raw, ...clean } = result;
 			return clean;
 		},
@@ -620,6 +639,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 				return [{ type: "text", text: `枚举「${value.category}」共 ${value.elements.length} 个元素：\n${lines.join("\n")}` }];
 			}
 		},
+		timeoutMs: cfg.timeoutMs,
 		async execute(args, exec) {
 			const workspace = sessionWorkspace(exec);
 			const imagePath = resolveImagePath(workspace, cfg.allowedDirs, args.image_path);
@@ -633,7 +653,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 				crop: args.crop,
 				budget: args.budget ?? "normal",
 				output
-			});
+			}, exec.signal);
 			const { raw, ...clean } = result;
 			return clean;
 		},
@@ -695,13 +715,14 @@ function createToolDefinitions(ctx, cfg, sem) {
 				return [{ type: "text", text: `主色分析（${value.image.region ?? "全图"}）：\n${lines.join("\n")}` }];
 			}
 		},
+		timeoutMs: cfg.timeoutMs,
 		async execute(args, exec) {
 			const workspace = sessionWorkspace(exec);
 			const imagePath = resolveImagePath(workspace, cfg.allowedDirs, args.image_path);
 			return runColors(ctx, cfg, sem, imagePath, {
 				region: args.region,
 				top: Math.max(1, Math.min(16, args.top ?? 8))
-			});
+			}, exec.signal);
 		},
 		presentCall(args) {
 			return { card: "generic", title: "主色分析", kind: "read", rawInput: args.image_path };
@@ -768,6 +789,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 			},
 			render: (_args, value) => [{ type: "text", text: value.text }]
 		},
+		timeoutMs: cfg.timeoutMs,
 		async execute(args, exec) {
 			const workspace = sessionWorkspace(exec);
 			const imagePath = resolveImagePath(workspace, cfg.allowedDirs, args.image_path);
@@ -776,7 +798,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 				overlap: Math.max(0, Math.min(2000, args.overlap ?? 100)),
 				budget: args.budget ?? "normal",
 				prompt: args.prompt
-			});
+			}, exec.signal);
 		},
 		presentCall(args) {
 			return { card: "generic", title: "长截图分块 OCR", kind: "read", rawInput: args.image_path };
@@ -798,18 +820,19 @@ function createToolDefinitions(ctx, cfg, sem) {
 			},
 			render: (_args, value) => [{ type: "text", text: `${value.text}\n\n（图片已保存: ${value.saved_path}）` }]
 		},
+		timeoutMs: cfg.timeoutMs,
 		async execute(args, exec) {
 			const workspace = sessionWorkspace(exec);
 			const dir = join(workspace, ".dsh-vision");
 			mkdirSync(dir, { recursive: true });
 			const dest = join(dir, `clipboard-${Date.now()}.png`);
-			await saveClipboardImage(cfg, dest);
+			await saveClipboardImage(cfg, dest, exec.signal);
 			const { text, imageInfo } = await runVision(ctx, cfg, sem, dest, {
 				mode: args.mode ?? "general",
 				prompt: args.prompt,
 				crop: args.crop,
 				budget: args.budget ?? "normal"
-			});
+			}, exec.signal);
 			return { text, saved_path: dest, image_info: imageInfo };
 		},
 		presentCall() {
@@ -826,13 +849,16 @@ async function apply(ctx, config = {}) {
 	const disposers = [];
 	const agentStates = new Map(); // agent -> disposer[]
 
-	ctx.skills.register({
+	// [spec-audit 2026-08-14] 注册前剥离 frontmatter（与磁盘 provider 行为一致）；
+	// disposer 收集进 disposers（cordis-primer 注册可逆原则）
+	const skillDisposer = ctx.skills.register({
 		name: "vision",
 		description: "识别图片内容。当用户发送图片、截图、报错图，或要求分析某张本地图片时使用。加载本 skill 后自动激活视觉工具（vision_analyze / vision_ocr / vision_ground / vision_detect / vision_dominant_colors / vision_long_screenshot_ocr / vision_clipboard）。",
 		whenToUse: "用户要求分析图片、截图、报错图、OCR、表格截图、代码报错截图、定位/枚举图片中的目标、取色分析、超长截图文字提取等视觉任务",
 		source: "runtime",
-		content: readFileSync(SKILL_MD, "utf8")
+		content: readFileSync(SKILL_MD, "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
 	});
+	if (typeof skillDisposer === "function") disposers.push(skillDisposer);
 
 	const disposeAll = (fns) => {
 		for (const fn of [...fns].reverse()) {
@@ -866,7 +892,10 @@ async function apply(ctx, config = {}) {
 		}
 	};
 
-	const progressive = cfg.progressive && Boolean(ctx.agents);
+	// [spec-audit 2026-08-14] agents 为可选服务（inject 已移除）：ctx.get() 查询，
+	// 缺失时退化为全局注册（与代码意图一致，死分支消除）
+	const agents = ctx.get("agents");
+	const progressive = cfg.progressive && Boolean(agents);
 
 	if (progressive) {
 		// 全局只挂一个轻量激活工具 + skill；完整工具集按 Agent 渐进暴露。
@@ -892,9 +921,8 @@ async function apply(ctx, config = {}) {
 			presentCall: () => ({ card: "generic", title: "激活视觉工具", kind: "execute" })
 		}));
 
-		disposers.push(ctx.on("agent/created", ({ agent }) => {
-			// 新 Agent 不自动激活：等它加载 vision skill 后再挂工具（省上下文）。
-		}));
+		// [spec-audit 2026-08-14] 移除空监听器：工具激活已由 tools/result 监听完成，
+		// agent/created 空实现是死代码（events.md：监听器应为有效逻辑）
 		disposers.push(ctx.on("agent/disposed", ({ agent }) => detach(agent)));
 		disposers.push(ctx.on("tools/result", (exec, result) => {
 			if (!result.isError

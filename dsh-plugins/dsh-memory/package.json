@@ -14,7 +14,8 @@
     "lib",
     "SKILL.md",
     "README.md",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "LICENSE"
   ],
   "dsh": {
     "bundle": {
@@ -30,6 +31,14 @@
     "agent-skills"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DDDFXYqiming/Agent_Extensions.git",
+    "directory": "dsh-plugins/dsh-memory"
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
   "peerDependencies": {
     "@deepseek-ai/dsh-tools": "*",
     "@deepseek-ai/dsh-system-prompt": "*"
@@ -41,10 +50,5 @@
     "@deepseek-ai/dsh-system-prompt": {
       "optional": true
     }
-  },
-  "dependencies": {
-    "@deepseek-ai/schemastery": "link:C:/Users/39795/.dsh/profiles/node_modules/@deepseek-ai/schemastery",
-    "@deepseek-ai/dsh-tools": "link:C:/Users/39795/.dsh/profiles/node_modules/@deepseek-ai/dsh-tools",
-    "@deepseek-ai/dsh-system-prompt": "link:C:/Users/39795/.dsh/profiles/node_modules/@deepseek-ai/dsh-system-prompt"
   }
 }

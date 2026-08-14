@@ -43,10 +43,10 @@ description: 识别图片内容。当用户发送图片、截图、报错图，�
 
 ## 使用步骤
 
-1. 从用户消息中找到图片路径；如果路径不明确，先查找最近的剪贴板截图：
+1. 从用户消息中找到图片路径（附件占位符 `[图片附件 sha256:...，本地路径 ...]` 或直接路径文本）；如果路径不明确，优先调用 `vision_clipboard`（用户把图片复制到剪贴板后说"看图"），或查找 DSH 附件目录最近的截图：
 
    ```powershell
-   Get-ChildItem $env:TEMP\codex-clipboard-*.png | Sort-Object LastWriteTime -Descending | Select-Object -First 3 FullName,Length
+   Get-ChildItem "$env:USERPROFILE\.dsh\attachments\v1\objects" -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 3 FullName,Length
    ```
 
 2. 运行脚本识别图片（插件模式下直接调用 `vision_analyze` / `vision_clipboard` 工具）：

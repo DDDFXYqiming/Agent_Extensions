@@ -45,17 +45,22 @@ v2026-08-14 曾改为「拼稿即清」（`attachAndSend` 里 setDraft 后立即
 
 ```bash
 # package.json dependencies 中：
-# "@omdsh-dev/dsh-annotation": "link:C:/Users/39795/Agent_Extensions/dsh-plugins/dsh-annotation-patched"
+# "@omdsh-dev/dsh-annotation": "link:E:/AI_Projects/Agent_Extensions/dsh-plugins/dsh-annotation-patched"
 # 或从本地目录安装：
-dsh plugin --profile web add C:/Users/39795/Agent_Extensions/dsh-plugins/dsh-annotation-patched
+dsh plugin --profile web add E:/AI_Projects/Agent_Extensions/dsh-plugins/dsh-annotation-patched
 ```
 
 ## 已知边界
 
 - 只支持选中**助手消息**（用户自己发的消息不处理）
-- 自动引用仅在**回车发送**时触发（点发送按钮不触发）
+- 自动引用在**回车发送**与**点击发送按钮**时均触发（PATCH(2026-08-14d) 起：capture 阶段拦截发送按钮先拼稿）
 - 浏览器端插件：改动 `client.js` 后需 **Ctrl+F5 强刷**（或换浏览器）才生效；**pnpm 更新会覆盖** node_modules 里的副本，须以本目录为源重新 link
 - 强依赖 DSH Web DOM 结构（`[data-time-hover-root]`、`[class*="bubble"]`、`[data-composer-card]` 等），DSH UI 升级可能失效
+
+## 维护标记
+
+- 本 fork 所有改动带 `PATCH(2026-08-14)` ~ `PATCH(2026-08-14e)` 注释标记（grep `PATCH(2026-08-14` 可全部定位），上游更新时可快速 diff 重新套用
+- 包名沿用上游 `@omdsh-dev/dsh-annotation`（本机 link 维护自洽）；**若计划发布到 npm，需先改名**（如 `@<owner>/dsh-annotation-patched`）并升版本，避免占用上游同名同版本
 
 ## License
 

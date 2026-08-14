@@ -71,6 +71,10 @@ _load_dotenv()
 # ── 配置（环境变量 / .env）──────────────────────────────────────────
 VISION_API_URL = os.environ.get("VISION_API_URL", "").strip()
 VISION_MODEL = os.environ.get("VISION_MODEL", "").strip()
+# [spec-audit 2026-08-14] 思考开关与 HTTP 超时可配置（不同模型部署无需改代码）：
+# VISION_THINKING = disabled | adaptive | off（缺省 disabled）；VISION_TIMEOUT 秒（缺省 180）
+VISION_THINKING = os.environ.get("VISION_THINKING", "disabled").strip().lower()
+VISION_TIMEOUT = float(os.environ.get("VISION_TIMEOUT", "180").strip() or "180")
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
 
@@ -217,10 +221,13 @@ def call_api(key, content, max_tokens, temperature):
         "messages": [{"role": "user", "content": content}],
         "max_tokens": max_tokens,
         "temperature": temperature,
-        # 默认关闭模型思考，跳过推理直接回答（识图更快）；
-        # 若模型不支持该参数可删除此字段，或改为 {"type": "adaptive"} 开启
-        "thinking": {"type": "disabled"},
+        # 思考开关可配置（VISION_THINKING=disabled|adaptive|off，缺省 disabled）；
+        # 若模型不支持该参数可设 VISION_THINKING=off（不发送该字段）
     }
+    if VISION_THINKING == "off":
+        pass  # 不发送 thinking 字段
+    else:
+        payload["thinking"] = {"type": VISION_THINKING if VISION_THINKING in ("disabled", "adaptive") else "disabled"}
     req = urllib.request.Request(
         VISION_API_URL,
         data=json.dumps(payload).encode("utf-8"),
@@ -228,7 +235,7 @@ def call_api(key, content, max_tokens, temperature):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
+        with urllib.request.urlopen(req, timeout=VISION_TIMEOUT) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
