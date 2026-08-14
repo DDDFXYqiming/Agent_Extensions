@@ -293,7 +293,7 @@ async function runGround(ctx, cfg, sem, imagePath, target, { crop, budget = "nor
 		} catch {
 			throw new Error(`vision-skill: grounding 输出不是有效 JSON: ${text.slice(0, 300)}`);
 		}
-		if (parsed.imageInfo) parsed.imageInfo = parseImageInfo(stderr);
+		// [fix 2026-08-15] 删除死代码：python 侧返回结构化 image 字段（小写），原 imageInfo（大写 key）条件恒 false
 		return parsed;
 	} finally {
 		sem.release();
@@ -702,6 +702,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 				properties: {
 					image: {
 						type: "object",
+						required: true, // [fix 2026-08-15] render 解引用 image.region，标 required 防止缺失时 projectionError
 						additionalProperties: true,
 						properties: {
 							path: { type: "string" },
@@ -727,7 +728,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 			},
 			render: (_args, value) => {
 				const lines = value.colors.map((c) => `${c.color}  ${c.share_pct}%`);
-				return [{ type: "text", text: `主色分析（${value.image.region ?? "全图"}）：\n${lines.join("\n")}` }];
+				return [{ type: "text", text: `主色分析（${value.image?.region ?? "全图"}）：\n${lines.join("\n")}` }];
 			}
 		},
 		timeoutMs: cfg.timeoutMs,
