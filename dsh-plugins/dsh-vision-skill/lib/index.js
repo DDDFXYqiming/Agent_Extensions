@@ -127,24 +127,30 @@ function run(command, args, options) {
 }
 
 /** 密钥解析：config.apiKey 优先；否则按操作解析 DSH Credential；最后看环境变量。
- * [spec-audit 2026-08-14] credentials 为可选服务：ctx.get() 查询，缺失时跳过。
- * [diag 2026-08-14] 补充诊断日志定位失败路径（credential 服务不可用 / resolve 异常 / 空值）。 */
+ * [spec-audit 2026-08-14 再修订] 属性访问 ctx.credentials 与 ctx.get() 双通道：
+ * 老代码（pi-ai 实测通过）用属性访问；ctx.get 在隔离 bundle ctx 上可能查不到服务。
+ * 失败路径直接 throw（错误进工具输出，不依赖终端日志）。 */
 async function resolveApiKey(ctx, cfg) {
 	if (cfg.apiKey) return cfg.apiKey;
-	const creds = ctx.get("credentials");
+	const viaProp = ctx.credentials;
+	const viaGet = ctx.get("credentials");
+	const creds = viaProp ?? viaGet;
 	try {
-		if (creds) {
+		if (creds && typeof creds.resolve === "function") {
 			const hit = await creds.resolve(credentialRef(cfg.credential));
 			if (hit && hit.value) return hit.value;
-			ctx.logger.warn(`vision-skill: credential 解析结果为空 (ref=${cfg.credential}, hit=${JSON.stringify(hit)})`);
-		} else {
-			ctx.logger.warn("vision-skill: credentials 服务不可用（ctx.get 返回 undefined）");
+			throw new Error(`vision-skill: credential 解析结果为空 (ref=${cfg.credential}, hit=${JSON.stringify(hit)})`);
 		}
 	} catch (error) {
-		// credentials 服务异常时继续尝试环境变量
-		ctx.logger.warn(`vision-skill: credential 解析异常: ${error?.message ?? error}`);
+		if (error instanceof Error && error.message.startsWith("vision-skill:")) throw error;
+		throw new Error(`vision-skill: credential 解析异常: ${error?.message ?? error}`);
 	}
-	return process.env.VISION_API_KEY ?? "";
+	const fromEnv = process.env.VISION_API_KEY ?? "";
+	if (fromEnv) return fromEnv;
+	throw new Error(
+		`vision-skill: apiKey 解析失败（ctx.credentials=${typeof viaProp !== "undefined"}, ` +
+		`ctx.get=${typeof viaGet !== "undefined"}, credentials 服务=${creds ? "存在" : "缺失"}, env 无 VISION_API_KEY）`
+	);
 }
 
 /**
