@@ -5,29 +5,31 @@ description: 识别图片内容。当用户发送图片、截图、报错图，�
 
 # 识图技能（DSH 标准插件版）
 
-当主模型不支持直接读取图片时，图片不会进入对话上下文，但用户消息中通常会附带图片的本地路径（形如 `C:/Users/.../xxx.png` 或附件路径）。
+当主模型不支持直接读取图片时，图片不会进入对话上下文，但本插件现在会：
+- **直接贴图**：client 插件在粘贴进入 DSH 附件管线前截获图片，输入框显示 `📎 image1.png / image2.png ...` 编号 chip（从 1 开始）；发送时自动上传到工作区 `.dsh-vision/pasted/` 并把路径文本交给模型（无需任何框架补丁）；
+- 或用户消息中本来就带图片本地路径（形如 `C:/Users/.../xxx.png`）。
 
 ## 图片如何进入工具（三种方式）
 
-本插件的所有工具只接收**图片的本地路径（文本）**，不接收图片本体。路径来源有三种：
+本插件的所有工具只接收**图片的本地路径（文本）**，不接收图片本体。路径来源有三种（前两种无需 pi-ai 补丁）：
 
 1. **路径直发（最常见）**：用户消息中的图片会以路径文本出现——可能是附件占位符（`[图片附件 sha256:...，本地路径 C:\Users\...png，模型不支持直接读图，请用 vision skill 读取]`），也可能是用户直接给出路径。直接调用 `vision_analyze` 等工具即可。
 2. **剪贴板**：用户说"看图"且图片在剪贴板（如 Win+Shift+S 截屏自动复制）→ 调用 `vision_clipboard`，它会自动把剪贴板图片保存到工作区 `.dsh-vision/` 再识别。
-3. **直接贴图**：仅当宿主打了"图片通道补丁"时可用（粘贴的图片会被自动转换为带路径的文本占位符）；在**零补丁环境**下，用户直接贴图会被框架拒绝（`attachment-error` / `MODEL_DOES_NOT_SUPPORT_IMAGES`），此时应引导用户改用方式 1/2：把图片保存到工作区后发送路径文本，或复制到剪贴板后说"看图"。
+3. **直接贴图**：本插件自带 paste-to-path client——在输入框粘贴图片时，图片先上传到工作区 `.dsh-vision/pasted/`，再以路径文本进入消息；消息里没有 image 块，因此 DSH 不会报 `MODEL_DOES_NOT_SUPPORT_IMAGES`。旧 pi-ai 补丁仅作为兼容保留，不再必需。
 
 ## DeepSeek Harness（DSH）插件模式
 
 本技能已打包为标准 DSH 插件 `dsh-vision-skill`（工具 + 运行时 skill，**无需任何框架补丁**）：
 
-- **`vision_analyze`**：识别指定路径的本地图片（`image_path` 必填；可选 `mode`/`prompt`/`crop`/`budget`）
+- **`vision_analyze`**：识别指定路径的本地图片（`image_path` 必填；可选 `mode`/`prompt`/`crop`/`budget`）。`mode=evidence` 返回结构化证据 JSON（summary / ocr_full_text / layout 阅读顺序 / semantics 实体关系 / uncertainty）；多 provider 自动 failover，429 自动退避
 - **`vision_ocr`**：独立 OCR 工具——提取图片中全部可见文字，保持原始排版（`image_path` 必填；可选 `prompt`/`crop`/`budget`）
 - **`vision_ground`**：定位工具——在图片中查找指定目标（如「所有按钮」「微信图标」），返回每个目标的**像素坐标框**（`bbox_pixel`）与归一化坐标（`bbox_normalized`，0-1000），可选 `output` 保存带标注框的预览图
 - **`vision_detect`**：枚举工具——清点图片中某一类元素（默认所有 UI 元素），逐个编号 + 像素坐标框；与 `vision_ground` 互补（ground 找一个，detect 数一类）
 - **`vision_dominant_colors`**：主色分析——提取图片（或区域）主要颜色与占比（**本地像素算法，无需视觉 API**），用于取主题色/配色分析
-- **`vision_long_screenshot_ocr`**：超长截图分块 OCR——聊天记录/整个网页等超高图自动切块（带重叠）→ 逐块识别 → 合并全文，带块边界信息
+- **`vision_long_screenshot_ocr`**：超长截图分块 OCR——聊天记录/整个网页等超高图自动切块（带重叠）→ 逐块识别 → 合并全文，带块边界信息；**每块先跑本地 tesseract（chi_sim+eng），失败自动回退 VLM**
 - **`vision_clipboard`**：读取剪贴板中的图片，保存到会话工作区 `.dsh-vision/` 后识别——用户在输入框粘贴图片被"当前模型不支持图片"拦截时，只需把图片复制到剪贴板（如 Win+Shift+S 截屏自动复制）后说"看图"即可
 - **渐进式工具暴露**：加载本 skill 后自动为当前 Agent 激活上述 7 个工具；若工具未出现，调用一次 `vision_activate` 兜底
-- **模型配置**走插件 config：`apiUrl` / `model` / `apiKey`（**任意 OpenAI 兼容的多模态模型均可接入**——如 Qwen-VL、MiniMax-M3、Gemini、GPT-4o 等；默认 MiniMax-M3，可直接替换。脚本请求体固定携带 `thinking: {"type": "disabled"}` 关闭思考，若模型不支持该参数可删）；密钥也支持 DSH Credential 引用（`credential: VISION_API_KEY`），推荐后者避免明文
+- **模型配置**走插件 config：`apiUrl` / `model` / `apiKey`（**任意 OpenAI 兼容的多模态模型均可接入**——如 Qwen-VL、MiniMax-M3、Gemini、GPT-4o 等；默认 MiniMax-M3）。新增 `visionProviders` 数组可配置 fallback 链路（顺序=优先级，自动 failover；429 按 Retry-After 退避重试一次）。密钥支持 DSH Credential 引用（`credential: VISION_API_KEY`），推荐后者避免明文
 - **分辨率预算**：`budget` 支持 `small`(≈512²) / `normal`(≈1024²) / `large`(≈1448²) / `mega`(≈4096²，约 16M 像素超高清，对应 Qwen 官方高分辨率模式)
 - 识别流程：脚本输出描述后**原样转述**，重要文字、报错信息逐字复述，不概括、不脑补
 
