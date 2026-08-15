@@ -1,17 +1,19 @@
 {
   "name": "dsh-vision-skill",
-  "version": "0.3.0",
-  "description": "DSH 标准插件版 vision skill：识别本地图片（vision_analyze/vision_ocr/vision_ground/vision_detect/vision_dominant_colors/vision_long_screenshot_ocr/vision_clipboard），任意 OpenAI 兼容多模态模型可接入（默认 MiniMax-M3），思考关闭。零框架补丁，Schemastery 配置校验。",
+  "version": "0.4.4",
+  "description": "DSH standard vision skill: Qwen dynamic-resolution preprocessing + OpenAI-compatible VLM chain with failover/429 backoff, structured evidence mode, local tesseract-first long-screenshot OCR, paste-to-path (no framework patch). 8 tools + runtime skill.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": {
       "default": "./lib/index.js"
     },
+    "./client": "./client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
+    "client.js",
     "scripts/vision.py",
     "templates",
     "cordis.patch.yml",
@@ -22,6 +24,13 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
     }
   },
   "keywords": [
@@ -46,6 +55,20 @@
   "peerDependencies": {
     "@deepseek-ai/dsh-credentials": "*",
     "@deepseek-ai/dsh-tools": "*",
-    "@deepseek-ai/schemastery": "*"
+    "@deepseek-ai/schemastery": "*",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6"
+  },
+  "scripts": {
+    "check": "node --check lib/index.js && node --check client.js && python -m py_compile scripts/vision.py",
+    "test": "python -m unittest discover -s tests -v && node --test tests/plugin.test.mjs tests/client.test.mjs"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-runtime": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-conversation": {
+      "optional": true
+    }
   }
 }

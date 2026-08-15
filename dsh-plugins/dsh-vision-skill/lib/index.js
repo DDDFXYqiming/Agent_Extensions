@@ -1,21 +1,20 @@
-// dsh-vision-skill — 标准 DSH 插件版 vision skill（v2：工程化增强）。
+// dsh-vision-skill — 标准 DSH 插件版 vision skill（v0.4）。
 //
 // 注册内容：
-//   1. 运行时 skill `vision`（内容 = SKILL.md，模型按需加载）
-//   2. 渐进式工具暴露（默认开启）：skill 加载成功后，为当前 Agent 挂载
-//      vision_analyze / vision_ocr / vision_ground / vision_clipboard；
-//      配置 progressive:false 或 agents 服务不可用时回退为全局注册。
-//   3. 模型配置走插件 config（apiUrl / model / apiKey 或 credential 引用），
-//      默认 MiniMax-M3，思考关闭；密钥支持 DSH Credential 引用（推荐），
-//      不再强制明文写在配置文件里。
-//   4. 工程化：路径围栏（工作区 / 附件目录 / allowedDirs）、超时、并发门控、
-//      结构化输出、失败安全（配置缺失不炸插件加载，调用时报清晰错误）。
+//   1. 运行时 skill `vision` + 渐进式工具暴露（vision_activate 兜底）
+//   2. 多 provider failover + 429 退避（config.visionProviders，顺序=优先级）
+//   3. vision_analyze evidence 结构化证据模式（summary/ocr/layout/uncertainty）
+//   4. 长截图 OCR 本地 tesseract 优先、VLM 兜底
+//   5. paste-to-path：client 截获粘贴图片，webServer 路由落盘工作区
+//      .dsh-vision/pasted/，消息只含路径文本，不再需要 pi-ai 图片补丁
+//   6. 路径围栏 / 超时 / 并发门控 / Credential 引用 / 严格输出 schema
 //
 // 识图核心方法不变：vision.py 的 Qwen 动态分辨率预处理 + OpenAI 兼容 VLM。
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
@@ -25,7 +24,9 @@ const name = "vision-skill";
 // [spec-audit 2026-08-14 修订] credentials/agents 必须声明 inject：
 // 实测 cordis ctx.get() 只查插件隔离层已登记的服务（未 inject 恒返回 undefined，
 // 导致 VISION_API_KEY 解析失败），可选依赖模式在本版本 cordis 不成立。
-const inject = ["skills", "tools", "credentials", "agents"];
+const inject = ["skills", "tools", "credentials", "agents", "sessions"];
+// [upgrade 2026-08-15] webServer 只在 web profile 存在：paste 路由走 apply 里的
+// 可选 ctx.inject（见 mountPasteRoute），headless 不受影响。
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
 const SKILL_MD = join(PLUGIN_DIR, "..", "SKILL.md");
@@ -48,6 +49,25 @@ export const Config = Schema.object({
 	// [spec-audit 2026-08-14] 纯 boolean：不再容忍字符串 'false'
 	progressive: Schema.boolean().default(true),
 	allowedDirs: Schema.array(Schema.string()).default([]),
+	// [upgrade 2026-08-15] 多 provider failover：数组顺序 = 优先级；主 provider
+	// 仍是 apiUrl/model/credential，此处只放 fallback。每个 provider 可带自己的
+	// apiKey 或 credential 引用。
+	visionProviders: Schema.array(Schema.object({
+		apiUrl: Schema.string().default(""),
+		model: Schema.string().default(""),
+		apiKey: Schema.string().default(""),
+		credential: Schema.string().default("VISION_API_KEY"),
+	})).default([]),
+	// 本地 tesseract：长截图 OCR 自动先走本地，不可用时回退 VLM。
+	tesseract: Schema.string().default("tesseract"),
+	tesseractLangs: Schema.string().default("chi_sim+eng"),
+	// paste-to-path 同源上传的单图字节上限。
+	pasteMaxBytes: Schema.number().min(1024).max(104857600).default(10485760),
+	// [upgrade 2026-08-15] 内容哈希图像记忆缓存：同一图片内容 + 相同
+	// mode/budget/crop/prompt 的结果缓存，TTL 内命中不再调视觉 API。
+	cache: Schema.boolean().default(true),
+	cacheTtlSeconds: Schema.number().min(10).max(86400).default(3600),
+	cacheMaxEntries: Schema.number().min(1).max(10000).default(200),
 });
 
 /** 与 templates/.env.example 同语义的默认值（可被插件 config 覆盖）。 */
@@ -62,6 +82,13 @@ const DEFAULTS = {
 	concurrency: 2,
 	progressive: true,
 	allowedDirs: [],
+	visionProviders: [],
+	tesseract: "tesseract",
+	tesseractLangs: "chi_sim+eng",
+	pasteMaxBytes: 10485760,
+	cache: true,
+	cacheTtlSeconds: 3600,
+	cacheMaxEntries: 200,
 };
 
 function resolveConfig(config = {}) {
@@ -77,6 +104,13 @@ function resolveConfig(config = {}) {
 		concurrency: config.concurrency ?? DEFAULTS.concurrency,
 		progressive: config.progressive !== false,
 		allowedDirs: Array.isArray(config.allowedDirs) ? config.allowedDirs : [],
+		visionProviders: Array.isArray(config.visionProviders) ? config.visionProviders : [],
+		tesseract: config.tesseract ?? DEFAULTS.tesseract,
+		tesseractLangs: config.tesseractLangs ?? DEFAULTS.tesseractLangs,
+		pasteMaxBytes: config.pasteMaxBytes ?? DEFAULTS.pasteMaxBytes,
+		cache: config.cache !== false,
+		cacheTtlSeconds: config.cacheTtlSeconds ?? DEFAULTS.cacheTtlSeconds,
+		cacheMaxEntries: config.cacheMaxEntries ?? DEFAULTS.cacheMaxEntries,
 	};
 }
 
@@ -100,6 +134,45 @@ class Semaphore {
 		const next = this.queue.shift();
 		if (next) next();
 	}
+}
+
+/** [upgrade 2026-08-15] 内容哈希图像记忆缓存（router 风格，JS 层 LRU + TTL）。 */
+export class ImageMemoryCache {
+	constructor({ ttlSeconds = 3600, maxEntries = 200 } = {}) {
+		this.ttlSeconds = ttlSeconds;
+		this.maxEntries = maxEntries;
+		this.entries = new Map();
+	}
+	get(key, now = Date.now()) {
+		const hit = this.entries.get(key);
+		if (!hit) return undefined;
+		if (now - hit.at > this.ttlSeconds * 1000) {
+			this.entries.delete(key);
+			return undefined;
+		}
+		// LRU touch：命中的 key 移到队尾。
+		this.entries.delete(key);
+		this.entries.set(key, hit);
+		return hit.value;
+	}
+	set(key, value, now = Date.now()) {
+		this.entries.delete(key);
+		this.entries.set(key, { at: now, value });
+		while (this.entries.size > this.maxEntries) {
+			const oldest = this.entries.keys().next().value;
+			if (oldest === undefined) break;
+			this.entries.delete(oldest);
+		}
+	}
+	clear() {
+		this.entries.clear();
+	}
+}
+
+/** 图片内容 hash + 识别参数组成缓存 key；不同 prompt/预算/裁剪互不串味。 */
+export function imageMemoryKey(imagePath, { mode = "general", budget = "normal", crop, prompt } = {}) {
+	const digest = createHash("sha256").update(readFileSync(imagePath)).digest("hex");
+	return `analyze:${digest}:${mode}:${budget}:${crop ?? ""}:${prompt ?? ""}`;
 }
 
 /** 子进程运行（stdout/stderr 按 UTF-8 收集，非零退出码抛错，支持超时与取消）。
@@ -156,6 +229,51 @@ async function resolveApiKey(ctx, cfg) {
 	);
 }
 
+/** [upgrade 2026-08-15] 解析 fallback provider 的密钥（失败返回空串，跳过该 fallback）。 */
+async function resolveProviderCredential(ctx, cfg, provider) {
+	const ref = provider?.credential || cfg.credential || "VISION_API_KEY";
+	const creds = ctx.credentials ?? ctx.get("credentials");
+	try {
+		if (creds && typeof creds.resolve === "function") {
+			const hit = await creds.resolve(credentialRef(ref));
+			if (hit && hit.value) return hit.value;
+		}
+	} catch {
+		// 单个 fallback 凭证不可用就跳过，不拖垮主链路
+	}
+	return "";
+}
+
+/**
+ * [upgrade 2026-08-15] 构造 Python 端 provider 链路环境。
+ * - VISION_PROVIDERS_JSON 携带完整有序链路（主 provider + fallbacks）
+ * - TESSERACT_* 让长截图 OCR 先走本地 tesseract
+ */
+async function buildVisionEnv(ctx, cfg, { needKey = true, apiKey = "" } = {}) {
+	const providers = [];
+	if (needKey) {
+		const primaryKey = apiKey || await resolveApiKey(ctx, cfg);
+		if (primaryKey) providers.push({ apiUrl: cfg.apiUrl, model: cfg.model, apiKey: primaryKey });
+		for (const provider of cfg.visionProviders ?? []) {
+			if (!provider || typeof provider !== "object") continue;
+			if (!provider.apiUrl || !provider.model) continue;
+			let key = typeof provider.apiKey === "string" ? provider.apiKey : "";
+			if (!key) key = await resolveProviderCredential(ctx, cfg, provider);
+			if (!key) continue;
+			providers.push({ apiUrl: provider.apiUrl, model: provider.model, apiKey: key });
+		}
+	}
+	return {
+		...process.env,
+		VISION_PROVIDERS_JSON: providers.length > 0 ? JSON.stringify(providers) : "",
+		VISION_API_URL: cfg.apiUrl,
+		VISION_MODEL: cfg.model,
+		VISION_API_KEY: providers[0]?.apiKey ?? "",
+		TESSERACT_BIN: cfg.tesseract || "tesseract",
+		TESSERACT_LANGS: cfg.tesseractLangs || "chi_sim+eng",
+	};
+}
+
 /**
  * 路径围栏：解析并校验图片路径必须位于工作区 / DSH 附件目录 / allowedDirs 之一。
  * 附件目录默认放行，保证"输入框贴图 → 附件路径 → 识图"核心链路不受影响。
@@ -197,6 +315,100 @@ function sessionWorkspace(exec) {
 	return exec.agent?.session?.header?.cwd ?? process.cwd();
 }
 
+/** [upgrade 2026-08-15] paste-to-path 同源上传路由。 */
+const PASTE_ROUTE = "/dsh-vision-skill/paste";
+
+function pasteExtension(mediaType) {
+	return {
+		"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif",
+		"image/webp": ".webp", "image/bmp": ".bmp", "image/tiff": ".tiff",
+		"image/avif": ".avif", "image/heic": ".heic", "image/heif": ".heif",
+	}[mediaType] ?? ".img";
+}
+
+function sanitizePastedName(raw, mediaType) {
+	const leaf = basename(String(raw ?? "").replaceAll("\\", "/"))
+		.replace(/[<>:"|?*\u0000-\u001f/\\]/gu, "_")
+		.replace(/^\\.+/u, "")
+		.trim()
+		.replace(/[. ]+$/u, "");
+	if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(leaf)) return `_${leaf}`;
+	const fallback = `clipboard-image${pasteExtension(mediaType)}`;
+	if (!leaf || leaf === "." || leaf === "..") return fallback;
+	return leaf.length <= 120 ? leaf : leaf.slice(0, 120);
+}
+
+function ensurePastePathInside(root, target) {
+	const rel = relative(root, target);
+	if (rel !== "" && (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel))) {
+		throw new Error(`pasted-image path escapes workspace: ${target}`);
+	}
+}
+
+function pasteJson(res, status, body) {
+	const bytes = Buffer.from(JSON.stringify(body));
+	res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Content-Length": String(bytes.length), "Cache-Control": "no-store" });
+	res.end(bytes);
+}
+
+function pasteRequestAccepted(req) {
+	const host = String(req.headers.host ?? "").toLowerCase();
+	if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host)) return false;
+	const origin = String(req.headers.origin ?? "").toLowerCase();
+	if (origin && !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(origin)) return false;
+	return true;
+}
+
+/** web profile 专属：把剪贴板图片字节落盘到工作区 .dsh-vision/pasted/。 */
+function mountPasteRoute(scope, ctx, cfg) {
+	const webServer = scope?.get?.("webServer") ?? scope?.webServer;
+	if (!webServer || typeof webServer.register !== "function") return undefined;
+	return webServer.register({
+		name: "dsh-vision-skill-paste",
+		kind: "exact",
+		path: PASTE_ROUTE,
+		handler: async (req, res) => {
+			if (req.method !== "POST") { res.writeHead(405).end(); return; }
+			if (!pasteRequestAccepted(req)) { pasteJson(res, 403, { ok: false, error: { code: "origin-rejected", message: "paste upload must come from this DSH Web origin" } }); return; }
+			try {
+				const url = new URL(req.url ?? PASTE_ROUTE, "http://localhost");
+				const sessionId = url.searchParams.get("sessionId");
+				if (!sessionId) throw new Error("sessionId is required");
+				const size = Number(url.searchParams.get("size"));
+				if (!Number.isSafeInteger(size) || size <= 0) throw new Error("size must be a positive integer");
+				if (size > cfg.pasteMaxBytes) throw new RangeError(`image exceeds ${cfg.pasteMaxBytes}-byte paste limit`);
+				const mediaType = String(req.headers["content-type"] ?? "").split(";", 1)[0].trim().toLowerCase();
+				if (!mediaType.startsWith("image/")) throw new Error("Content-Type must be image/*");
+				const session = ctx.sessions.get(sessionId);
+				const cwd = session?.header?.cwd;
+				if (!cwd || !isAbsolute(cwd)) throw new Error("session has no absolute workspace");
+				const workspace = realpathSync(resolve(cwd));
+				const root = join(workspace, ".dsh-vision", "pasted");
+				mkdirSync(root, { recursive: true });
+				const realRoot = realpathSync(root);
+				ensurePastePathInside(workspace, realRoot);
+				const name = sanitizePastedName(url.searchParams.get("name") ?? "", mediaType);
+				const finalPath = join(realRoot, `${Date.now()}-${randomUUID().slice(0, 8)}-${name}`);
+				ensurePastePathInside(realRoot, finalPath);
+				const chunks = [];
+				let total = 0;
+				for await (const chunk of req) {
+					const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+					total += bytes.length;
+					if (total > size || total > cfg.pasteMaxBytes) throw new RangeError("pasted image body exceeds its declared size");
+					chunks.push(bytes);
+				}
+				if (total !== size) throw new Error(`body size mismatch: expected ${size}, received ${total}`);
+				writeFileSync(finalPath, Buffer.concat(chunks), { mode: 0o600 });
+				pasteJson(res, 201, { ok: true, value: { absolutePath: finalPath, filename: basename(finalPath), bytes: size } });
+			} catch (error) {
+				const status = error instanceof RangeError ? 413 : 400;
+				pasteJson(res, status, { ok: false, error: { code: "paste-image-rejected", message: String(error?.message ?? error) } });
+			}
+		},
+	});
+}
+
 /** 从 vision.py 的 stderr 日志解析图片信息（零侵入，核心输出不受影响）。 */
 function parseImageInfo(stderr) {
 	const info = {};
@@ -212,8 +424,8 @@ function visionParams() {
 	return {
 		mode: {
 			type: "string",
-			enum: ["general", "ocr", "table", "code", "error"],
-			description: "识别模式：general 描述 / ocr 纯文字 / table 表格转 Markdown / code 代码报错 / error 报错分析，默认 general"
+			enum: ["general", "ocr", "table", "code", "error", "evidence"],
+			description: "识别模式：general 描述 / ocr 纯文字 / table 表格转 Markdown / code 代码报错 / error 报错分析 / evidence 结构化证据（summary+ocr+layout+uncertainty），默认 general"
 		},
 		prompt: {
 			type: "string",
@@ -244,12 +456,7 @@ async function runVision(ctx, cfg, sem, imagePath, { mode = "general", prompt, c
 	try {
 		const { stdout, stderr } = await run(cfg.python, args, {
 			cwd: dirname(VISION_PY),
-			env: {
-				...process.env,
-				VISION_API_URL: cfg.apiUrl,
-				VISION_MODEL: cfg.model,
-				VISION_API_KEY: apiKey
-			},
+			env: await buildVisionEnv(ctx, cfg, { apiKey }),
 			timeoutMs: cfg.timeoutMs,
 			signal
 		});
@@ -276,12 +483,7 @@ async function runGround(ctx, cfg, sem, imagePath, target, { crop, budget = "nor
 	try {
 		const { stdout, stderr } = await run(cfg.python, args, {
 			cwd: dirname(VISION_PY),
-			env: {
-				...process.env,
-				VISION_API_URL: cfg.apiUrl,
-				VISION_MODEL: cfg.model,
-				VISION_API_KEY: apiKey
-			},
+			env: await buildVisionEnv(ctx, cfg, { apiKey }),
 			timeoutMs: cfg.timeoutMs,
 			signal
 		});
@@ -309,14 +511,10 @@ async function runJsonScript(ctx, cfg, sem, args, { needKey = true, signal } = {
 	}
 	await sem.acquire();
 	try {
+		const env = await buildVisionEnv(ctx, cfg, { needKey, apiKey });
 		const { stdout, stderr } = await run(cfg.python, [VISION_PY, ...args], {
 			cwd: dirname(VISION_PY),
-			env: {
-				...process.env,
-				VISION_API_URL: cfg.apiUrl,
-				VISION_MODEL: cfg.model,
-				VISION_API_KEY: apiKey
-			},
+			env,
 			timeoutMs: cfg.timeoutMs,
 			signal
 		});
@@ -356,6 +554,16 @@ async function runLongOcr(ctx, cfg, sem, imagePath, { targetHeight = 2000, overl
 	const args = [imagePath, "--long-ocr", "--target-height", String(targetHeight), "--overlap", String(overlap)];
 	if (budget) args.push("--budget", budget);
 	if (prompt) args.push("--prompt", prompt);
+	// [upgrade 2026-08-15] 本地 tesseract 优先；config 可切换二进制/语言包。
+	args.push("--tesseract-langs", cfg.tesseractLangs || "chi_sim+eng");
+	return runJsonScript(ctx, cfg, sem, args, { signal });
+}
+
+/** [upgrade 2026-08-15] 结构化证据：调 vision.py --evidence-json 并解析。 */
+async function runEvidence(ctx, cfg, sem, imagePath, { prompt, crop, budget = "normal" } = {}, signal) {
+	const args = [imagePath, "--evidence-json", "--budget", budget];
+	if (crop) args.push("--crop", crop);
+	if (prompt) args.push("--prompt", prompt);
 	return runJsonScript(ctx, cfg, sem, args, { signal });
 }
 
@@ -380,9 +588,12 @@ async function saveClipboardImage(cfg, dest, signal) {
 
 /** 完整工具集（渐进暴露时按 Agent 挂载，兜底时全局注册）。 */
 function createToolDefinitions(ctx, cfg, sem) {
+	const memoryCache = cfg.cache
+		? new ImageMemoryCache({ ttlSeconds: cfg.cacheTtlSeconds, maxEntries: cfg.cacheMaxEntries })
+		: null;
 	const analyze = defineTool({
 		name: "vision_analyze",
-		description: "用配置的视觉模型（默认 MiniMax-M3，思考关闭）识别一张本地图片，返回文字描述。支持绝对路径或相对会话工作区的路径，以及模式/裁剪/分辨率预算参数。",
+		description: "用配置的视觉模型识别一张本地图片，返回文字描述。mode=evidence 时返回结构化证据（summary / ocr_full_text / layout / semantics / uncertainty）。多 provider 配置下自动 failover，429 自动退避重试。同一图片内容+相同参数的识别结果会走内容哈希缓存。",
 		parameters: {
 			image_path: {
 				type: "string",
@@ -412,7 +623,64 @@ function createToolDefinitions(ctx, cfg, sem) {
 							},
 							resized: { type: "string" }
 						}
-					}
+					},
+					// evidence 模式的结构化证据（modlens 对齐：含 semantics/entities/relations）。
+					evidence: {
+						type: "object",
+						additionalProperties: true,
+						properties: {
+							summary: { type: "string", required: true },
+							ocr_full_text: { type: "string" },
+							layout: {
+								type: "array",
+								items: {
+									type: "object",
+									additionalProperties: true,
+									properties: {
+										region: { type: "string" },
+										reading_order: { type: "integer" },
+										text: { type: "string" }
+									}
+								}
+							},
+							semantics: {
+								type: "object",
+								additionalProperties: true,
+								properties: {
+									scene: { type: "string" },
+									entities: {
+										type: "array",
+										items: {
+											type: "object",
+											additionalProperties: true,
+											properties: {
+												name: { type: "string" },
+												type: { type: "string" },
+												evidence: { type: "string" }
+											}
+										}
+									},
+									relations: {
+										type: "array",
+										items: {
+											type: "object",
+											additionalProperties: true,
+											properties: {
+												subject: { type: "string" },
+												predicate: { type: "string" },
+												object: { type: "string" }
+											}
+										}
+									}
+								}
+							},
+							uncertainty: { type: "array", items: { type: "string" } },
+							visual: { type: "object", additionalProperties: true },
+							parse_error: { type: "boolean" }
+						}
+					},
+					// 图像记忆缓存命中标记。
+					cached: { type: "boolean" }
 				}
 			},
 			render: (_args, value) => [{ type: "text", text: value.text }]
@@ -421,13 +689,36 @@ function createToolDefinitions(ctx, cfg, sem) {
 		async execute(args, exec) {
 			const workspace = sessionWorkspace(exec);
 			const imagePath = resolveImagePath(workspace, cfg.allowedDirs, args.image_path);
+			const mode = args.mode ?? "general";
+			const budget = args.budget ?? "normal";
+			const cacheKey = memoryCache ? imageMemoryKey(imagePath, {
+				mode,
+				budget,
+				crop: args.crop,
+				prompt: args.prompt
+			}) : undefined;
+			const hit = cacheKey ? memoryCache.get(cacheKey) : undefined;
+			if (hit) return { ...hit, cached: true };
+			if (mode === "evidence") {
+				const evidence = await runEvidence(ctx, cfg, sem, imagePath, {
+					prompt: args.prompt,
+					crop: args.crop,
+					budget
+				}, exec.signal);
+				const text = evidence?.summary ?? "";
+				const value = { text, mode, image_info: evidence?.image_info ?? {}, evidence };
+				if (cacheKey) memoryCache.set(cacheKey, value);
+				return { ...value, cached: false };
+			}
 			const { text, imageInfo } = await runVision(ctx, cfg, sem, imagePath, {
-				mode: args.mode ?? "general",
+				mode,
 				prompt: args.prompt,
 				crop: args.crop,
-				budget: args.budget ?? "normal"
+				budget
 			}, exec.signal);
-			return { text, mode: args.mode ?? "general", image_info: imageInfo };
+			const value = { text, mode, image_info: imageInfo };
+			if (cacheKey) memoryCache.set(cacheKey, value);
+			return { ...value, cached: false };
 		},
 		presentCall(args) {
 			return { card: "generic", title: "识图", kind: "read", rawInput: args.image_path };
@@ -796,8 +1087,18 @@ function createToolDefinitions(ctx, cfg, sem) {
 							properties: {
 								index: { type: "integer" },
 								top: { type: "integer" },
-								bottom: { type: "integer" }
+								bottom: { type: "integer" },
+								engine: { type: "string" }
 							}
+						}
+					},
+					// [upgrade 2026-08-15] tesseract/vision 引擎使用统计。
+					engines: {
+						type: "object",
+						additionalProperties: true,
+						properties: {
+							tesseract: { type: "integer" },
+							vision: { type: "integer" }
 						}
 					},
 					text: { type: "string", required: true }
@@ -880,13 +1181,25 @@ async function apply(ctx, config = {}) {
 	const cfg = resolveConfig(config);
 	const sem = new Semaphore(cfg.concurrency);
 	const disposers = [];
+	// [upgrade 2026-08-15] paste-to-path：web profile 挂同源上传路由，
+	// headless / 无 webServer 的环境静默跳过（不影响渐进暴露）。
+	if (typeof ctx.inject === "function") {
+		try {
+			ctx.inject(["webServer"], (scope) => {
+				const dispose = mountPasteRoute(scope, ctx, cfg);
+				if (dispose) disposers.push(dispose);
+			});
+		} catch (error) {
+			console.error(`[vision-skill] paste route skipped: ${error?.message ?? error}`);
+		}
+	}
 	const agentStates = new Map(); // agent -> disposer[]
 
 	// [spec-audit 2026-08-14] 注册前剥离 frontmatter（与磁盘 provider 行为一致）；
 	// disposer 收集进 disposers（cordis-primer 注册可逆原则）
 	const skillDisposer = ctx.skills.register({
 		name: "vision",
-		description: "识别图片内容。当用户发送图片、截图、报错图，或要求分析某张本地图片时使用。加载本 skill 后自动激活视觉工具（vision_analyze / vision_ocr / vision_ground / vision_detect / vision_dominant_colors / vision_long_screenshot_ocr / vision_clipboard）。",
+		description: "识别图片内容。当用户发送图片、截图、报错图，或要求分析某张本地图片时使用。加载本 skill 后自动激活视觉工具（vision_analyze 支持 evidence 结构化证据模式 / vision_ocr / vision_ground / vision_detect / vision_dominant_colors / vision_long_screenshot_ocr 支持本地 tesseract 优先 / vision_clipboard）。",
 		whenToUse: "用户要求分析图片、截图、报错图、OCR、表格截图、代码报错截图、定位/枚举图片中的目标、取色分析、超长截图文字提取等视觉任务",
 		source: "runtime",
 		content: readFileSync(SKILL_MD, "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
@@ -934,7 +1247,7 @@ async function apply(ctx, config = {}) {
 		// 全局只挂一个轻量激活工具 + skill；完整工具集按 Agent 渐进暴露。
 		ctx.tools.register(defineTool({
 			name: "vision_activate",
-			description: "加载 vision skill 后，为当前 Agent 激活视觉工具（vision_analyze / vision_ocr / vision_ground / vision_detect / vision_dominant_colors / vision_long_screenshot_ocr / vision_clipboard）。skill 加载成功后通常会自动激活；仅当工具未出现时调用一次。",
+			description: "加载 vision skill 后，为当前 Agent 激活视觉工具（vision_analyze / vision_ocr / vision_ground / vision_detect / vision_dominant_colors / vision_long_screenshot_ocr / vision_clipboard）。skill 加载成功后通常会自动激活；仅当工具未出现时调用一次。vision_analyze 可用 mode=evidence 获取结构化证据。",
 			parameters: {},
 			output: {
 				schema: {
