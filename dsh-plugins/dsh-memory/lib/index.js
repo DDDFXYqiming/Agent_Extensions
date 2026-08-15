@@ -21,10 +21,11 @@
 // 注入（存在性编码：L1 索引每轮可见）：
 //   ctx.systemPrompt.context({ name: 'memory:index', order: 10,
 //     text: () => readIndex() }) —— 每次组装请求实时读 L1。
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import Schema from "@deepseek-ai/schemastery";
@@ -50,6 +51,7 @@ export const Config = Schema.object({
 	// v0.3 自动蒸馏
 	autoPending: Schema.boolean().default(true),
 	// v0.4 自动维护
+	maintainEveryTurns: Schema.number().default(20),
 });
 
 const L0_TEMPLATE = `# Memory Management SOP (L0)
@@ -444,6 +446,177 @@ function parsePending(text) {
 	return out;
 }
 
+function hashText(text) {
+	return createHash("sha256").update(String(text || "")).digest("hex").slice(0, 16);
+}
+
+function loadAccess(root) {
+	try {
+		return JSON.parse(readFileSync(join(root, "file_access_stats.json"), "utf8"));
+	} catch {
+		return {};
+	}
+}
+
+function readStatsFile(root) {
+	try {
+		return JSON.parse(readFileSync(join(root, "memory_stats.json"), "utf8"));
+	} catch {
+		return {};
+	}
+}
+
+function writeStatsFile(root, stats) {
+	writeFileSync(join(root, "memory_stats.json"), JSON.stringify(stats, null, 2), "utf8");
+}
+
+function computeNamespaceStats(root) {
+	const facts = factSections(root).filter((f) => !isArchived(root, "fact", f));
+	const sops = sopNames(root).filter((s) => !isArchived(root, "sop", s));
+	const archivedFacts = factSections(root).filter((f) => isArchived(root, "fact", f));
+	const archivedSops = sopNames(root).filter((s) => isArchived(root, "sop", s));
+	const pending = pendingNames(root);
+	let sizeBytes = 0;
+	for (const f of ["index.txt", "facts.md", "memory_management_sop.md"]) {
+		try { sizeBytes += statSync(join(root, f)).size; } catch { /* 忽略 */ }
+	}
+	try {
+		for (const f of readdirSync(join(root, "sops"))) sizeBytes += statSync(join(root, "sops", f)).size;
+	} catch { /* 忽略 */ }
+	try {
+		for (const f of readdirSync(join(root, PENDING_DIR))) sizeBytes += statSync(join(root, PENDING_DIR, f)).size;
+	} catch { /* 忽略 */ }
+	return {
+		facts: facts.length,
+		sops: sops.length,
+		pending: pending.length,
+		archived: archivedFacts.length + archivedSops.length,
+		size_bytes: sizeBytes,
+		updatedAt: new Date().toISOString(),
+	};
+}
+
+/** 去重：按内容 hash 检测重复 fact/sop，重复项归档并保留 citation（不物理删除）。 */
+function dedupeEntries(root) {
+	const report = { removed: [], merged: [] };
+	const seenSops = new Map();
+	for (const slug of sopNames(root)) {
+		if (isArchived(root, "sop", slug)) continue;
+		const content = readSop(root, slug);
+		if (content === null) continue;
+		const h = hashText(content.replace(/\s+/g, " ").trim());
+		if (seenSops.has(h)) {
+			const prev = seenSops.get(h);
+			const ts = Date.now();
+			try {
+				copyFileSync(join(root, "sops", `${slug}.md`), join(root, ARCHIVE_DIR, `sop-${slug}-${ts}.md`));
+			} catch { /* 忽略 */ }
+			setEntryMeta(root, "sop", slug, { archived: true, duplicateOf: prev, archivedAt: new Date().toISOString() });
+			report.removed.push(`sop:${slug} -> duplicate of ${prev}`);
+		} else {
+			seenSops.set(h, slug);
+		}
+	}
+	const seenFacts = new Map();
+	for (const topic of factSections(root)) {
+		if (isArchived(root, "fact", topic)) continue;
+		const content = readFact(root, topic);
+		if (content === null) continue;
+		const h = hashText(content.replace(/\s+/g, " ").trim());
+		if (seenFacts.has(h)) {
+			const prev = seenFacts.get(h);
+			const ts = Date.now();
+			try {
+				writeFileSync(join(root, ARCHIVE_DIR, `fact-${slugify(topic)}-${ts}.md`), `# ${topic}\n\n${content}\n`, "utf8");
+			} catch { /* 忽略 */ }
+			setEntryMeta(root, "fact", topic, { archived: true, duplicateOf: prev, archivedAt: new Date().toISOString() });
+			report.removed.push(`fact:${topic} -> duplicate of ${prev}`);
+		} else {
+			seenFacts.set(h, topic);
+		}
+	}
+	return report;
+}
+
+/** 压缩 L1 索引：超过 maxIndexLines 时，按访问热度保留活跃条目，但文件不删除。 */
+function compressIndexEntries(root, maxLines) {
+	const facts = factSections(root).filter((f) => !isArchived(root, "fact", f));
+	const sops = sopNames(root).filter((s) => !isArchived(root, "sop", s));
+	const access = loadAccess(root);
+	facts.sort((a, b) => (access[`fact:${b}`] || 0) - (access[`fact:${a}`] || 0));
+	sops.sort((a, b) => (access[`sop:${b}`] || 0) - (access[`sop:${a}`] || 0));
+	const p = join(root, "index.txt");
+	let head = INDEX_TEMPLATE;
+	let tail = "";
+	try {
+		const cur = readFileSync(p, "utf8");
+		const b = cur.indexOf("<!-- AUTO-BEGIN -->");
+		const e = cur.indexOf("<!-- AUTO-END -->");
+		if (b >= 0 && e > b) {
+			head = cur.slice(0, b);
+			tail = cur.slice(e + "<!-- AUTO-END -->".length);
+		} else if (cur.trim()) {
+			head = cur.replace(/\s*$/, "\n\n");
+		}
+	} catch { /* 用模板 */ }
+	const headLines = head.split("\n").length;
+	const tailLines = tail.split("\n").length;
+	const maxAuto = Math.max(1, maxLines - headLines - tailLines - 4);
+	const keptFacts = facts.slice(0, Math.ceil(maxAuto / 2));
+	const keptSops = sops.slice(0, Math.floor(maxAuto / 2));
+	const auto = "[L2] " + (keptFacts.length ? keptFacts.join(" | ") : "（空）")
+		+ "\n[L3] " + (keptSops.length ? keptSops.map((s) => `sops/${s}.md`).join(" | ") : "（空）");
+	writeFileSync(p, head + "<!-- AUTO-BEGIN -->\n" + auto + "\n<!-- AUTO-END -->\n" + tail, "utf8");
+	return {
+		facts_kept: keptFacts.length,
+		sops_kept: keptSops.length,
+		total_facts: facts.length,
+		total_sops: sops.length,
+	};
+}
+
+/** 寻找可合并的 SOP 候选（仅报告，需模型/用户确认后真正合并）。 */
+function findMergeCandidates(root) {
+	const names = sopNames(root).filter((s) => !isArchived(root, "sop", s));
+	const candidates = [];
+	for (let i = 0; i < names.length; i++) {
+		for (let j = i + 1; j < names.length; j++) {
+			const a = names[i];
+			const b = names[j];
+			const wordsA = a.replace(/[-_]/g, " ").toLowerCase().split(" ").filter(Boolean);
+			const wordsB = b.replace(/[-_]/g, " ").toLowerCase().split(" ").filter(Boolean);
+			const common = wordsA.filter((w) => wordsB.includes(w)).length;
+			if (common < 1) continue;
+			const contentA = (readSop(root, a) || "").replace(/\s+/g, " ").trim();
+			const contentB = (readSop(root, b) || "").replace(/\s+/g, " ").trim();
+			const similarity = contentA === contentB ? 1 : 0;
+			if (similarity > 0 || common >= 2) {
+				candidates.push({ a, b, common_words: common, similarity });
+			}
+		}
+	}
+	return candidates.slice(0, 20);
+}
+
+/** 执行一次完整维护：去重 + 压缩索引 + 统计 + 合并候选。 */
+function runMaintain(root, maxLines) {
+	const dedupe = dedupeEntries(root);
+	const compress = compressIndexEntries(root, maxLines);
+	const stats = computeNamespaceStats(root);
+	const mergeCandidates = findMergeCandidates(root);
+	const report = {
+		runAt: new Date().toISOString(),
+		dedupe,
+		compress,
+		stats,
+		mergeCandidates,
+	};
+	writeFileSync(join(root, "maintenance-report.json"), JSON.stringify(report, null, 2), "utf8");
+	writeStatsFile(root, stats);
+	// compressIndexEntries 已写入压缩后的索引；这里不调用 syncIndex，避免把压缩结果覆盖回全量。
+	return report;
+}
+
 // [fix 2026-08-15] apply 体内无 await，去掉 async：同步返回 disposer，cordis runner.collect 直接收集
 function apply(ctx, config = {}) {
 	const cfg = {
@@ -453,6 +626,7 @@ function apply(ctx, config = {}) {
 		defaultNamespace: config.defaultNamespace || "",
 		autoNamespace: config.autoNamespace !== false,
 		autoPending: config.autoPending !== false,
+		maintainEveryTurns: config.maintainEveryTurns ?? 20,
 	};
 	ensureMemoryLayout(cfg.memoryDir);
 
@@ -502,6 +676,15 @@ function apply(ctx, config = {}) {
 				} catch { /* 候选写入失败不影响主流程 */ }
 				toolBuffers.delete(id);
 			}
+		}
+		// 自动维护：低频率触发去重/压缩/统计/合并候选
+		if (cfg.maintainEveryTurns > 0 && n % cfg.maintainEveryTurns === 0) {
+			try {
+				const ns = resolveNamespace(cfg);
+				const root = nsRoot(cfg.memoryDir, ns);
+				ensureNamespaceLayout(root);
+				runMaintain(root, cfg.maxIndexLines);
+			} catch { /* 维护失败不影响主流程 */ }
 		}
 		if (n % 10 !== 0) return undefined;
 		const agent = agentsService?.get?.(id);
@@ -773,7 +956,7 @@ function apply(ctx, config = {}) {
 			},
 			render: (_args, value) => [{
 				type: "text",
-				text: `✅ 已${value.action === "created" ? "新建" : "更新"}记忆「${value.topic}」（${value.entry_type === "fact" ? "L2 事实" : "L3 SOP"}）→ ${value.path} [${value.namespace}]${value.index?.over_limit ? "\n⚠️ L1 索引超过限制，建议运行 memory_index" : ""}`
+				text: `✅ 已${value.action === "created" ? "新建" : "更新"}记忆「${value.topic}」（${value.entry_type === "fact" ? "L2 事实" : "L3 SOP"}）→ ${value.path} [${value.namespace}]${value.index?.over_limit ? "\n⚠️ L1 索引超过限制，建议运行 memory_index 或 memory_maintain" : ""}`
 			}]
 		},
 		async execute(args) {
@@ -842,6 +1025,97 @@ function apply(ctx, config = {}) {
 		}
 	});
 
+	const statsTool = defineTool({
+		name: "memory_stats",
+		description: "查看记忆库统计：各命名空间条目数、pending 数、归档数、总大小。可选 namespace。",
+		parameters: {
+			namespace: {
+				type: "string",
+				description: "命名空间"
+			}
+		},
+		output: {
+			schema: {
+				type: "object",
+				additionalProperties: false,
+				properties: {
+					namespace: { type: "string", required: true },
+					stats: {
+						type: "object",
+						additionalProperties: false,
+						properties: {
+							facts: { type: "integer", required: true },
+							sops: { type: "integer", required: true },
+							pending: { type: "integer", required: true },
+							archived: { type: "integer", required: true },
+							size_bytes: { type: "integer", required: true },
+							updatedAt: { type: "string", required: true }
+						},
+						required: true
+					}
+				}
+			},
+			render: (_args, value) => [{
+				type: "text",
+				text: `统计[${value.namespace}]：L2=${value.stats.facts} L3=${value.stats.sops} pending=${value.stats.pending} archived=${value.stats.archived} size=${value.stats.size_bytes}B`
+			}]
+		},
+		execute(args) {
+			const ns = resolveNamespace(cfg, args.namespace);
+			const root = nsRoot(cfg.memoryDir, ns);
+			ensureNamespaceLayout(root);
+			return { namespace: ns, stats: computeNamespaceStats(root) };
+		},
+		presentCall() {
+			return { card: "generic", title: "查看记忆统计", kind: "read" };
+		}
+	});
+
+	const maintainTool = defineTool({
+		name: "memory_maintain",
+		description: "执行记忆库维护：去重（重复项归档保留 citation）、压缩 L1 索引（按访问热度保留活跃条目）、生成统计、产出可合并 SOP 候选（需人工/模型确认）。可选 namespace。",
+		parameters: {
+			namespace: {
+				type: "string",
+				description: "命名空间"
+			}
+		},
+		output: {
+			schema: {
+				type: "object",
+				additionalProperties: false,
+				properties: {
+					namespace: { type: "string", required: true },
+					report: {
+						type: "object",
+						additionalProperties: true,
+						properties: {
+							runAt: { type: "string" },
+							dedupe: { type: "object", additionalProperties: true },
+							compress: { type: "object", additionalProperties: true },
+							stats: { type: "object", additionalProperties: true },
+							mergeCandidates: { type: "array", items: { type: "object", additionalProperties: true } }
+						},
+						required: true
+					}
+				}
+			},
+			render: (_args, value) => [{
+				type: "text",
+				text: `维护完成[${value.namespace}]：去重移除 ${value.report.dedupe?.removed?.length || 0} 条，索引保留 L2=${value.report.compress?.facts_kept || 0}/${value.report.compress?.total_facts || 0} L3=${value.report.compress?.sops_kept || 0}/${value.report.compress?.total_sops || 0}，合并候选 ${value.report.mergeCandidates?.length || 0} 组`
+			}]
+		},
+		execute(args) {
+			const ns = resolveNamespace(cfg, args.namespace);
+			const root = nsRoot(cfg.memoryDir, ns);
+			ensureNamespaceLayout(root);
+			const report = runMaintain(root, cfg.maxIndexLines);
+			return { namespace: ns, report };
+		},
+		presentCall() {
+			return { card: "generic", title: "执行记忆维护", kind: "execute" };
+		}
+	});
 
 	const pendingTool = defineTool({
 		name: "memory_pending",
@@ -1281,7 +1555,7 @@ function apply(ctx, config = {}) {
 		}
 	});
 
-	const allTools = [readTool, listTool, writeTool, indexTool, pendingTool, acceptTool, updateTool, archiveTool, rollbackTool, expandTool];
+	const allTools = [readTool, listTool, writeTool, indexTool, statsTool, maintainTool, pendingTool, acceptTool, updateTool, archiveTool, rollbackTool, expandTool];
 
 	// ── 渐进式暴露 ──
 	const disposeAll = (fns) => {
@@ -1318,7 +1592,7 @@ function apply(ctx, config = {}) {
 	if (progressive) {
 		ctx.tools.register(defineTool({
 			name: "memory_activate",
-			description: "加载 memory skill 后，为当前 Agent 激活记忆工具（memory_read / memory_list / memory_write / memory_index / memory_pending / memory_accept / memory_update / memory_archive / memory_rollback / memory_expand）。skill 加载成功后通常会自动激活；仅当工具未出现时调用一次。",
+			description: "加载 memory skill 后，为当前 Agent 激活记忆工具（memory_read / memory_list / memory_write / memory_index / memory_stats / memory_maintain / memory_pending / memory_accept / memory_update / memory_archive / memory_rollback / memory_expand）。skill 加载成功后通常会自动激活；仅当工具未出现时调用一次。",
 			parameters: {},
 			output: {
 				schema: {
