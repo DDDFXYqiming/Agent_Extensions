@@ -4,7 +4,7 @@
 
 > 零框架补丁：插件本身只使用官方扩展接缝（`ctx.skills.register` / `ctx.tools.register` / `ctx.credentials` / `ctx.sessions` / `ctx.webServer` / client 注入），可随 DSH 版本升级。**v0.4 起直接贴图走 paste-to-path，不再需要 pi-ai 补丁**；旧补丁只作为兼容保留，并附带还原脚本。
 
-## 能力一览（7 工具 + 1 运行时 skill）
+## 能力一览（8 工具 + 1 运行时 skill）
 
 | 名称 | 说明 |
 |---|---|
@@ -40,7 +40,7 @@ Qwen 官方动态分辨率预处理（`smart_resize`：预算像素 + patch 网�
 
 ```
 dsh-vision-skill/
-├── lib/index.js          # 插件主体（skill 注册 + 7 工具 + 渐进暴露 + 围栏）
+├── lib/index.js          # 插件主体（skill 注册 + 8 工具 + 渐进暴露 + 围栏）
 ├── scripts/vision.py     # 识图脚本（动态分辨率 / OCR / grounding / 主色 / 长图分块）
 ├── scripts/reapply-pi-ai-vision-patch.ps1  # pi-ai 适配器「图片→路径」幂等补丁脚本（dsh 升级后重跑）
 ├── SKILL.md              # 运行时 skill 内容（模型按需加载）

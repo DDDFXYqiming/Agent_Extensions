@@ -1,6 +1,6 @@
 # dsh-memory
 
-**DeepSeek Harness（DSH）跨会话长期记忆插件** —— 命名空间隔离 + L1 索引注入（存在性编码）+ L2 环境事实 + L3 任务经验 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护。
+**DeepSeek Harness（DSH）跨会话长期记忆插件** —— 命名空间隔离 + L1 索引注入（存在性编码）+ L2 环境事实 + L3 任务经验 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护 + 渐进式工具暴露。
 
 ## 能力
 
@@ -8,6 +8,7 @@
 |---|---|
 | `memory:index` 注入 | 通过 `ctx.systemPrompt.context` 把 L1 索引注入每轮模型上下文（实时读文件，改动即生效） |
 | `memory`（运行时 skill） | 触发语义：何时读、何时写、何时同步索引 |
+| `memory_activate` | 渐进式暴露兜底：skill 加载后工具未自动出现时调用一次 |
 | `memory_list` | 列出全部记忆（L2 facts + L3 sops + pending + 索引行数） |
 | `memory_read` | 读取指定记忆（index / fact 主题 / sop 文件名），返回溯源 meta |
 | `memory_write` | 写入记忆（fact/sop，**evidence 必填** = 行动验证公理） |
@@ -27,6 +28,7 @@
 |---|---|
 | L1 索引注入 | `ctx.systemPrompt.context` 每轮实时注入 L1（读文件，改动即时生效，无需重载） |
 | 写入工具 | `memory_write`（模型/用户主动，evidence 强制） |
+| 渐进式暴露 | 全局只挂 `memory_activate`，skill 加载成功后按 Agent 挂载 12 个记忆工具；`progressive: false` 回退全局注册 |
 | 自动蒸馏 | turn/end 把成功工具调用写入 `pending/` 候选区，`memory_accept` 确认后入正式记忆 |
 | 溯源/审计 | `memory-meta.json` 记录 `sourceSession` / `sourceSeqs` / `createdAt` / `updatedAt` / `evidence` |
 | 冲突/过期 | `memory_update`(supersede) / `memory_archive` / `memory_rollback`，旧版本保留在 `.history/` / `archive/` |
@@ -41,8 +43,8 @@
 ## 安装
 
 ```powershell
-# bundle 标准安装（自带 cordis.patch.yml，贡献 id: memory）
-dsh plugin --profile web add E:\AI_Projects\dsh-plugins\dsh-memory
+# bundle 标准安装（自带 cordis.patch.yml，贡献 id: dsh-memory）
+dsh plugin --profile web add <Agent_Extensions 仓库绝对路径>\dsh-plugins\dsh-memory
 ```
 
 ### 配置（可选，覆盖默认）
