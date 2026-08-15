@@ -14,8 +14,8 @@
 
 | 插件 | 能力 | 依赖 |
 |---|---|---|
-| `dsh-vision-skill` v2.1 | 识图插件：7 个工具 + 渐进式工具暴露 + Credential 化 + 路径围栏 | Node.js + DSH（`dsh-tools` / `dsh-credentials`）、Python 3 + Pillow、视觉模型 API Key |
-| `dsh-memory` | 跨会话长期记忆：L1 索引注入（每轮实时、KV 缓存友好）+ L2 环境事实 + L3 任务经验，行动验证写入 | Node.js + DSH（`dsh-tools`） |
+| `dsh-vision-skill` v0.4.4 | 识图插件：8 个工具（含渐进式暴露激活工具）+ Credential 化 + 路径围栏 | Node.js + DSH（`dsh-tools` / `dsh-credentials`）、Python 3 + Pillow、视觉模型 API Key |
+| `dsh-memory` v0.4 | 跨会话长期记忆：命名空间隔离 + L1 索引注入（存在性编码、KV 缓存友好）+ L2 环境事实 + L3 任务经验 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护 | Node.js + DSH（`dsh-tools`） |
 | `dsh-annotation-patched` | 选中批注/引用插件（fork 增强）：选中助手回复文字 → 批注（可空）或一键「引用」→ 回车随消息发送，回复按 `Annotation N` 逐条对照；增强：Codex 式「引用」按钮（显式确认制）+ 幽灵引用修复 | Node.js + DSH（纯浏览器端 bundle，零 Node 逻辑） |
 | `dsh-side-panel-patched` | 右侧工作区面板（fork 增强）：文件树/多文件 tab/预览/编辑（CodeMirror）+ Git 审查 + 终端；增强：绕开官方 520px 宽度上限、头部像素级对齐、Codex 风格梭形拖拽把手、文件 tab 栈 + 会话跟踪、Windows 终端防崩溃 | Node.js + DSH（文件/Git/终端 API + 浏览器 bundle） |
 
@@ -44,8 +44,8 @@
 ```
 Agent_Extensions/
 ├── dsh-plugins/               # DeepSeek Harness（DSH）原生插件
-│   ├── dsh-vision-skill/      # 识图插件 v2.1（7 工具 + 渐进式暴露 + Credential 化）
-│   ├── dsh-memory/            # 跨会话分层长期记忆
+│   ├── dsh-vision-skill/      # 识图插件 v0.4.4（8 工具 + 渐进式暴露 + Credential 化）
+│   ├── dsh-memory/            # 分层长期记忆（v0.4：命名空间/自动蒸馏/自动维护）
 │   ├── dsh-annotation-patched/ # 选中批注/引用插件（fork 增强，Codex 式选中即引用）
 │   └── dsh-side-panel-patched/ # 右侧工作区面板（fork 增强，多文件 tab + 会话跟踪）
 ├── General_skills/            # 通用智能体技能（跨框架，挂载即用）
@@ -107,7 +107,7 @@ python scripts/vision.py --check
 
 ## 🧩 DSH 插件能力一览
 
-### dsh-vision-skill v2.1（7 工具 + 1 运行时 skill）
+### dsh-vision-skill v0.4.4（8 工具 + 1 运行时 skill）
 
 | 工具 | 能力 |
 |---|---|
@@ -116,20 +116,26 @@ python scripts/vision.py --check
 | `vision_ground` / `vision_detect` | 目标定位 / 元素枚举（像素坐标框 + 归一化坐标） |
 | `vision_dominant_colors` | 主色分析（本地像素算法，无需 API） |
 | `vision_clipboard` | 剪贴板图片兜底（应对"当前模型不支持图片"粘贴拦截） |
+| `vision_activate` | 渐进式暴露兜底：skill 加载后工具未自动出现时调用一次 |
 
 工程化特性：**渐进式工具暴露**（全局只挂 1 个轻量激活工具，省上下文）、**密钥 Credential 化**（`credential: VISION_API_KEY` 引用，每操作解析）、**路径围栏**（realpath 校验防穿越）、**超时与并发门控**、**严格 JSON Schema 结构化输出**。
 
-### dsh-memory（分层长期记忆）
+### dsh-memory v0.4（分层长期记忆）
 
 | 组件 | 说明 |
 |---|---|
-| `memory:index` | 通过 `ctx.systemPrompt.context` 每轮实时注入 L1 索引（读文件即生效，无需重载） |
+| `memory:index` 注入 | 通过 `ctx.systemPrompt.context` 每轮实时注入 L1 索引（存在性编码，读文件即生效，KV 缓存友好） |
 | `memory`（运行时 skill） | 触发语义：何时读 / 何时写 / 何时同步索引 |
-| `memory_list` | 列出全部记忆（L2 facts + L3 sops + 索引行数） |
-| `memory_read` | 读取指定记忆（index / fact 主题 / sop 文件名） |
+| `memory_activate` | 渐进式暴露兜底：skill 加载后工具未自动出现时调用一次 |
+| `memory_list` / `memory_read` | 列出 / 读取记忆（index / fact / sop，含溯源 meta） |
 | `memory_write` | 写入记忆（fact/sop，**evidence 必填** = 行动验证公理） |
 | `memory_index` | 重建 L1 索引自动段（保留 `[RULES]` 手动段） |
+| `memory_pending` / `memory_accept` | 自动蒸馏候选区：查看 / 确认入正式记忆 |
+| `memory_update` / `memory_archive` / `memory_rollback` | 更新（supersede 保留历史）/ 归档 / 回滚 |
+| `memory_expand` | 通过 `sessionQuery` 展开 sourceSession/sourceSeqs 原始事件 |
+| `memory_stats` / `memory_maintain` | 统计 / 自动维护（去重、压缩索引、合并候选） |
 
+核心特性：**命名空间隔离**（`<memoryDir>/<namespace>/...`，默认 workspace 目录 + git 分支）、**自动蒸馏**（turn/end 成功工具调用 → `pending/`，确认后才入正式记忆）、**自动维护**（`maintainEveryTurns` 默认 20）、**渐进式工具暴露**（`progressive: false` 可回退全局注册）。
 核心公理：**行动验证**（No Execution, No Memory）、**神圣不可删改**（已验证事实可压缩迁移、严禁丢弃）、**禁易变状态**（时间戳/PID/临时路径不存）、**最小充分指针**（L1 只写存在性）。注入走 user-role 快照，**不破坏 DSH 的 KV 缓存命中率**（设计细节见插件 README）。
 
 ### dsh-annotation-patched（选中批注/引用，fork 增强）

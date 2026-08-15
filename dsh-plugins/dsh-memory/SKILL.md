@@ -5,7 +5,7 @@ description: 跨会话长期记忆：读写经验 SOP 与环境事实；管理 p
 
 # 记忆管理（DSH 版）
 
-跨会话长期记忆：L1 索引注入（每轮可见）+ L2 环境事实 + L3 任务经验 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护。
+跨会话长期记忆：命名空间隔离 + L1 索引注入（每轮可见）+ L2 环境事实 + L3 任务经验 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护。
 
 ## 触发时机
 
@@ -50,6 +50,7 @@ description: 跨会话长期记忆：读写经验 SOP 与环境事实；管理 p
 ├── .history/                  supersede/rollback 历史快照
 ├── memory-meta.json           溯源/审计元数据
 ├── memory_stats.json          聚合统计
+├── maintenance-report.json   最近一次维护报告
 └── file_access_stats.json     读取热度统计
 ```
 
@@ -59,6 +60,7 @@ description: 跨会话长期记忆：读写经验 SOP 与环境事实；管理 p
 |---|---|
 | `memory_list` | 列出全部记忆（facts + sops + pending + 索引行数） |
 | `memory_read` | 读取指定记忆（index / fact 主题 / sop 文件名），含溯源 meta |
+| `memory_activate` | 渐进式暴露兜底：skill 加载后工具未自动出现时调用一次 |
 | `memory_write` | 写入记忆（fact/sop，**evidence 必填**） |
 | `memory_index` | 重建 L1 索引自动段 |
 | `memory_pending` | 查看自动蒸馏候选 |
