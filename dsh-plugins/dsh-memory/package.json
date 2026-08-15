@@ -1,7 +1,7 @@
 {
   "name": "dsh-memory",
-  "version": "0.1.0",
-  "description": "DSH 跨会话长期记忆：L1 索引注入（存在性编码）+ 行动验证写入 + 分层管理（index/facts/sops）。",
+  "version": "0.4.0",
+  "description": "DSH 跨会话长期记忆：命名空间隔离 + L1 索引注入（存在性编码）+ 行动验证写入 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护（去重/压缩/统计/合并候选）。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -15,8 +15,14 @@
     "SKILL.md",
     "README.md",
     "cordis.patch.yml",
-    "LICENSE"
+    "LICENSE",
+    "test"
   ],
+  "scripts": {
+    "build": "node --check lib/index.js",
+    "test": "vitest run",
+    "test:smoke": "dsh --profile headless --dump-config"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -25,10 +31,12 @@
   "keywords": [
     "deepseek-harness",
     "dsh",
+    "dsh-plugin",
     "dsh-plugins",
     "memory",
     "long-term-memory",
-    "agent-skills"
+    "agent-skills",
+    "cross-session-memory"
   ],
   "license": "MIT",
   "repository": {
@@ -43,5 +51,8 @@
     "@deepseek-ai/dsh-tools": "*",
     "@deepseek-ai/dsh-system-prompt": "*",
     "@deepseek-ai/schemastery": "*"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
   }
 }
