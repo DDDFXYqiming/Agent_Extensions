@@ -1,11 +1,11 @@
 ---
 name: memory
-description: 跨会话长期记忆：读写经验 SOP 与环境事实。当任务涉及本机环境、工具配置、以前踩过的坑，或任务完成发现值得沉淀的验证经验时使用。
+description: 跨会话长期记忆：读写经验 SOP 与环境事实；管理 pending 候选、溯源、归档/回滚、统计与维护。当任务涉及本机环境、工具配置、以前踩过的坑，或任务完成发现值得沉淀的验证经验时使用。
 ---
 
 # 记忆管理（DSH 版）
 
-跨会话长期记忆：L1 索引注入（每轮可见）+ L2 环境事实 + L3 任务经验。
+跨会话长期记忆：L1 索引注入（每轮可见）+ L2 环境事实 + L3 任务经验 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护。
 
 ## 触发时机
 
@@ -28,10 +28,14 @@ description: 跨会话长期记忆：读写经验 SOP 与环境事实。当任�
 - ❌ 易变状态：时间戳、PID、临时路径、一次性 ID
 - ❌ 通用常识、日志记录、推理过程细节
 
-### 索引同步
-- `memory_write` 已自动同步 L1 索引，通常无需手动操作
-- 手动改动过 facts.md / sops/ 文件后 → `memory_index` 重建索引
-- 索引超 30 行时：精简 [RULES]（词级修改，禁 overwrite 全文）
+### 候选确认（自动蒸馏）
+- turn/end 会自动把成功工具调用写入 `pending/` 候选区
+- 用 `memory_pending` 查看，`memory_accept` 确认入正式记忆；不需要的直接忽略
+
+### 维护
+- 可手动运行 `memory_maintain`：去重、压缩 L1 索引、统计、合并候选
+- 也可配置 `maintainEveryTurns` 自动触发
+- `memory_stats` 查看统计
 
 ## 存储布局
 
@@ -41,6 +45,11 @@ description: 跨会话长期记忆：读写经验 SOP 与环境事实。当任�
 ├── index.txt                  L1 索引（≤30 行：L2/L3 存在性列表 + RULES）
 ├── facts.md                   L2 环境事实（## SECTION）
 ├── sops/*.md                  L3 任务经验
+├── pending/*.md               自动蒸馏候选区
+├── archive/                   归档/历史保留
+├── .history/                  supersede/rollback 历史快照
+├── memory-meta.json           溯源/审计元数据
+├── memory_stats.json          聚合统计
 └── file_access_stats.json     读取热度统计
 ```
 
@@ -48,14 +57,22 @@ description: 跨会话长期记忆：读写经验 SOP 与环境事实。当任�
 
 | 工具 | 用途 |
 |---|---|
-| `memory_list` | 列出全部记忆（facts + sops + 索引行数） |
-| `memory_read` | 读取指定记忆（index / fact 主题 / sop 文件名） |
+| `memory_list` | 列出全部记忆（facts + sops + pending + 索引行数） |
+| `memory_read` | 读取指定记忆（index / fact 主题 / sop 文件名），含溯源 meta |
 | `memory_write` | 写入记忆（fact/sop，**evidence 必填**） |
 | `memory_index` | 重建 L1 索引自动段 |
+| `memory_pending` | 查看自动蒸馏候选 |
+| `memory_accept` | 接受 pending 候选入正式记忆 |
+| `memory_update` | 更新记忆（supersede 保留历史） |
+| `memory_archive` | 归档记忆（L1 隐藏，文件保留） |
+| `memory_rollback` | 回滚到最近历史快照 |
+| `memory_expand` | 展开 sourceSession/sourceSeqs 原始事件 |
+| `memory_stats` | 查看统计 |
+| `memory_maintain` | 去重/压缩/统计/合并候选 |
 
 ## 原则
 
 1. **行动验证**：No Execution, No Memory. 只写成功验证过的信息。
 2. **最小充分**：内容尽可能短；只记"遗忘会导致高成本重试"的信息。
-3. **不删改验证事实**：可以压缩、迁移，严禁丢弃。
-4. **主动写入**：记忆写入永远由模型/用户主动发起，不会自动修改配置或安装插件。
+3. **不删改验证事实**：可以压缩、迁移、supersede、archive，严禁物理丢弃。
+4. **主动写入 + 候选确认**：自动蒸馏只进 pending，正式记忆必须经确认。
