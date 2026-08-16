@@ -459,6 +459,9 @@ export function apply(ctx, config = {}) {
     },
     async execute() {
       const store = await storePromise
+      // Reload so metrics reflect the on-disk store even when another process
+      // (e.g. a migration script) has written entries/embeddings.
+      await store.reload()
       const entries = memoryMetrics(store.entries, DEFAULT_TIERS, cfg.ocrTextOnlyPromptTokens).map((e) => {
         // Drop null optional fields so strict DSH output schemas don't reject them.
         const out = {}

@@ -43,8 +43,11 @@
 ## 安装
 
 ```powershell
-# bundle 标准安装（自带 cordis.patch.yml，贡献 id: dsh-memory）
-dsh plugin --profile web add <Agent_Extensions 仓库绝对路径>\dsh-plugins\dsh-memory
+# 从 GitHub 安装（推荐，自带 cordis.patch.yml，贡献 id: dsh-memory）
+dsh plugin --profile web add github:DDDFXYqiming/dsh-memory
+
+# 本地开发时也可直接使用仓库目录
+dsh plugin --profile web add <本目录>
 ```
 
 ### 配置（可选，覆盖默认）

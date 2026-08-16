@@ -22,8 +22,7 @@
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DDDFXYqiming/Agent_Extensions.git",
-    "directory": "dsh-plugins/dsh-ocr1-memory"
+    "url": "git+https://github.com/DDDFXYqiming/dsh-ocr1-memory.git"
   },
   "keywords": [
     "deepseek-harness",

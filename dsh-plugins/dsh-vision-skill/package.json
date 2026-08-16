@@ -46,8 +46,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DDDFXYqiming/Agent_Extensions.git",
-    "directory": "dsh-plugins/dsh-vision-skill"
+    "url": "git+https://github.com/DDDFXYqiming/dsh-vision-skill.git"
   },
   "engines": {
     "node": ">=22.19"

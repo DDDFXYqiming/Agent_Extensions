@@ -1,5 +1,24 @@
 # Agent_Extensions
 
+> ## 📦 DSH 插件已拆分为独立仓库
+>
+> 本仓库 `dsh-plugins/` 下的 DSH 插件已迁移为独立 GitHub 仓库，推荐直接安装独立仓库：
+>
+> | 插件 | 独立仓库 |
+> |---|---|
+> | dsh-vision-skill | https://github.com/DDDFXYqiming/dsh-vision-skill |
+> | dsh-memory | https://github.com/DDDFXYqiming/dsh-memory |
+> | dsh-annotation-patched | https://github.com/DDDFXYqiming/dsh-annotation-patched |
+> | dsh-side-panel-patched | https://github.com/DDDFXYqiming/dsh-side-panel-patched |
+> | dsh-ocr1-memory | https://github.com/DDDFXYqiming/dsh-ocr1-memory |
+>
+> 安装示例：
+> ```bash
+> dsh plugin --profile web add github:DDDFXYqiming/dsh-ocr1-memory
+> ```
+>
+> 本仓库保留这些插件的历史快照与说明，后续更新请以独立仓库为准。
+
 **DeepSeek Harness（DSH）插件与 AI Agent 技能集合** —— 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的原生插件（走官方扩展接缝，零框架补丁）+ 跨框架通用 Skill + Hermes 插件，开箱即用。
 
 ![repo](https://img.shields.io/badge/agent-skills-4B8BBE) ![dsh](https://img.shields.io/badge/deepseek--harness-plugin-7A4FBF) ![license](https://img.shields.io/badge/license-MIT-green)

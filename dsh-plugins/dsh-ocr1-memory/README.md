@@ -72,10 +72,16 @@
 ## 安装
 
 ```bash
-# headless（自测）
-dsh plugin --profile headless add <本目录>
+# 从 GitHub 安装（推荐）
+dsh plugin --profile web add github:DDDFXYqiming/dsh-ocr1-memory
 
-# web（长期使用）
+# headless（自测）
+dsh plugin --profile headless add github:DDDFXYqiming/dsh-ocr1-memory
+```
+
+本地开发时也可直接使用仓库目录：
+
+```bash
 dsh plugin --profile web add <本目录>
 ```
 

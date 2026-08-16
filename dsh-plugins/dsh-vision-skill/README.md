@@ -54,8 +54,8 @@ dsh-vision-skill/
 
 ```powershell
 # 1. 克隆仓库（或已有）
-git clone https://github.com/DDDFXYqiming/Agent_Extensions.git
-cd Agent_Extensions\dsh-plugins\dsh-vision-skill
+git clone https://github.com/DDDFXYqiming/dsh-vision-skill.git
+cd dsh-vision-skill
 
 # 2. （可选）本地开发依赖：peer 包由 DSH 自带（dsh-base 提供 @deepseek-ai/dsh-tools 等），
 #    无需在插件目录单独安装；若脚本独立运行需要类型/工具，可临时加：
@@ -70,7 +70,7 @@ cd Agent_Extensions\dsh-plugins\dsh-vision-skill
 ### 方式二：插件命令（推荐，bundle 标准安装）
 
 ```powershell
-dsh plugin --profile web add <绝对路径>\dsh-plugins\dsh-vision-skill
+dsh plugin --profile web add github:DDDFXYqiming/dsh-vision-skill
 ```
 
 安装后插件包自带的 `cordis.patch.yml` 会自动贡献 `id: vision-skill` 条目（进 profile 的 bundles 列表），**无需手动 insert**。配置默认值由插件内置的 Schemastery Config schema 提供（`apiUrl`=MiniMax / `model`=MiniMax-M3 / `credential`=VISION_API_KEY）。

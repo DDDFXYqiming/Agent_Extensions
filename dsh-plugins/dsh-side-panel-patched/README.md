@@ -57,11 +57,12 @@ hover/拖动时显示纯线性梭形（菱形 `clip-path: polygon(50% 0,0% 50%,5
 
 ## 安装
 
-本目录供 `Agent_Extensions` 仓库维护；本机 web profile 使用 link 依赖指向本目录：
+从 GitHub 安装（推荐）：
 
 ```bash
-# package.json dependencies 中：
-# "@dsh-external/dsh-side-panel": "link:<Agent_Extensions>/dsh-plugins/dsh-side-panel-patched"
+dsh plugin --profile web add github:DDDFXYqiming/dsh-side-panel-patched
+# 本地开发时也可直接使用仓库目录
+dsh plugin --profile web add <本目录>
 ```
 
 ## 发布形态（2026-08-14 起）

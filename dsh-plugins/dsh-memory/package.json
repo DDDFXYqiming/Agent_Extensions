@@ -41,8 +41,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DDDFXYqiming/Agent_Extensions.git",
-    "directory": "dsh-plugins/dsh-memory"
+    "url": "git+https://github.com/DDDFXYqiming/dsh-memory.git"
   },
   "engines": {
     "node": ">=22.19"
