@@ -85,22 +85,18 @@ Agent_Extensions/
 
 ### 方式一：安装 DSH 插件（以 `dsh-vision-skill` 为例）
 
-完整步骤见 [`dsh-plugins/dsh-vision-skill/README.md`](dsh-plugins/dsh-vision-skill/README.md)，推荐 **bundle 标准安装**：
+DSH 插件已拆分为独立仓库，推荐直接安装独立仓库：
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/DDDFXYqiming/Agent_Extensions.git
-cd Agent_Extensions/dsh-plugins/dsh-vision-skill
+# 1. 从独立仓库安装（自带 cordis.patch.yml，自动贡献 id: vision-skill）
+dsh plugin --profile web add github:DDDFXYqiming/dsh-vision-skill
 
-# 2. 安装依赖（dsh-tools / dsh-credentials）
-pnpm add "@deepseek-ai/dsh-tools@rc" "@deepseek-ai/dsh-credentials@rc"
-
-# 3. 注册到 web profile（自带 cordis.patch.yml，自动贡献 id: vision-skill）
-dsh plugin --profile web add <本目录绝对路径>
-
-# 4. 配置 Credential（$DSH_HOME/.credentials.yaml）
+# 2. 配置 Credential（$DSH_HOME/.credentials.yaml）
 VISION_API_KEY: sk-xxxx
 ```
+
+> 本仓库 `dsh-plugins/` 下保留的是历史快照；各插件最新文档见对应独立仓库。
+
 
 > ⚠️ bundle 安装后**不要**在 profile 的 `cordis.patch.yml` 里再 `insert` 同名条目，否则会触发 `duplicate loader entry id` 启动崩溃；需要自定义配置时用裸条目按 id 覆盖（见插件 README）。
 
