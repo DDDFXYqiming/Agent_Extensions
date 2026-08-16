@@ -73,7 +73,27 @@ async function main() {
   const dirB = join(root, 'memory-store')
   const patchA = join(root, 'profile-a.yml')
   const patchB = join(root, 'profile-b.yml')
-  writeFileSync(patchA, `- id: dsh-memory\n  disabled: true\n- id: dsh-ocr1-memory\n  config:\n    storeDir: '${dirA.replace(/\\/g, '/')}'\n`)
+  // By default the benchmark exercises OCR read-back but not per-store image
+  // embeddings (embedding makes multi-store tasks much slower). Set
+  // COMPARE_WITH_EMBEDDING=1 to also enable the 1280d DeepSeek-OCR embeddings.
+  const withEmbedding = process.env.COMPARE_WITH_EMBEDDING === '1'
+  const ocr1Config = [
+    `storeDir: '${dirA.replace(/\\/g, '/')}'`,
+    `ocrBaseUrl: 'http://127.0.0.1:18080/v1'`,
+    `ocrModel: 'deepseek-ocr'`,
+    `requireOcr: true`,
+    `ocrRepeatPenalty: 1.2`,
+    `ocrNoRepeatNgramSize: 30`,
+  ]
+  if (withEmbedding) {
+    ocr1Config.push(
+      `ocrEmbeddingBaseUrl: 'http://127.0.0.1:18084/v1'`,
+      `ocrEmbeddingModel: 'deepseek-ocr'`,
+      `ocrEmbeddingEmptyPromptTokens: 1`,
+      `ocrEmbeddingAutoStart: false`,
+    )
+  }
+  writeFileSync(patchA, `- id: dsh-memory\n  disabled: true\n- id: dsh-ocr1-memory\n  config:\n    ${ocr1Config.join('\n    ')}\n`)
   writeFileSync(patchB, `- id: dsh-ocr1-memory\n  disabled: true\n- id: dsh-memory\n  config:\n    memoryDir: '${dirB.replace(/\\/g, '/')}'\n`)
 
   const results = []

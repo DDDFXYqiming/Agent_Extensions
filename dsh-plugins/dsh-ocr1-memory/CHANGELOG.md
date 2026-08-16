@@ -52,7 +52,7 @@
 - DSH 工具输出 schema 严格性：`ocr1_mem_store` 补 `updated` 字段，`ocr1_mem_list` 只返回 schema 声明字段，避免 headless Agent 报 invalid output
 
 ### DSH 级对比（R5/R6）
-- 在隔离 headless 环境完成完整对比：
+- 在隔离 headless 环境完成完整对比（dsh-ocr1-memory 使用完整 OCR + embedding 配置）：
   - R5 选择性遗忘：dsh-ocr1-memory PASS；dsh-memory FAIL（归档后 `memory_read` 仍可读到）
   - R6 跨会话持久化：两者 PASS
 

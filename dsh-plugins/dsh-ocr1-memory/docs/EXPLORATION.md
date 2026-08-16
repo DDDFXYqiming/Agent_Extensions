@@ -104,6 +104,7 @@
   - R5：dsh-ocr1-memory PASS，dsh-memory FAIL
   - R6：两者 PASS
 - 现已通过 llama.cpp `/v1/embeddings` 的 marker-only 请求存储**真实 1280 维 DeepSeek-OCR 视觉 embedding**，并测量直接视觉 token 数（marker-only `prompt_tokens` − 空文本基线）。
+- 已调研通用 agent 记忆测试规范（MemoryAgentBench / LongMemEval / LoCoMo / AMB），并整理成 `docs/TEST_SPEC.md`；R1–R6 与这些规范一一映射。
 - 距离“完全复现 OCR1 论文效果”仍缺：
   - DeepEncoder 内部逐层输出的纯 visual token 数量（当前使用 llama.cpp token 统计，属于接口级直接测量）
   - LoRA 微调 DeepSeek-OCR 做 SoM 编号检索（按目标要求不做）

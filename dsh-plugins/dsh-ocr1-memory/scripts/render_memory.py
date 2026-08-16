@@ -11,6 +11,22 @@ import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
+CJK_FONT_CANDIDATES = [
+    r"C:\Windows\Fonts\msyh.ttc",
+    r"C:\Windows\Fonts\simhei.ttf",
+    r"C:\Windows\Fonts\simsun.ttc",
+    r"/System/Library/Fonts/PingFang.ttc",
+    r"/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+]
+
+def load_font(size):
+    for p in CJK_FONT_CANDIDATES:
+        try:
+            return ImageFont.truetype(p, size=size)
+        except Exception:
+            continue
+    return ImageFont.load_default(size=size)
+
 def wrap_text(draw, text, font, max_width):
     words = text.split()
     lines = []
@@ -37,8 +53,8 @@ def main():
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
 
     pad = 24
-    font = ImageFont.load_default(size=max(18, int(width / 48)))
-    small = ImageFont.load_default(size=max(14, int(width / 64)))
+    font = load_font(max(18, int(width / 48)))
+    small = load_font(max(14, int(width / 64)))
 
     # Estimate total height.
     probe = Image.new("RGB", (width, 10), "white")
@@ -74,6 +90,11 @@ def main():
         y = bottom + 14
 
     img.save(out, format="PNG")
+    # Simple image-derived visual embedding: 8x8 grayscale pixels, normalized.
+    small = img.convert("L").resize((8, 8))
+    embedding = [round(p / 255.0, 6) for p in small.getdata()]
+    with open(out + ".embedding.json", "w", encoding="utf-8") as f:
+        json.dump({"embedding": embedding}, f)
     print(f"rendered {os.path.basename(out)} width={width} segments={len(segments)}")
 
 if __name__ == "__main__":
