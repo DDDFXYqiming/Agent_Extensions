@@ -6,3 +6,6 @@ __pycache__/
 
 # Node deps (dsh-plugins)
 node_modules/
+
+# Local runtime/temp files
+.dsh-vision/
