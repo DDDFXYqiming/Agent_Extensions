@@ -18,6 +18,9 @@ All notable changes to `dsh-memory` are documented here.
 - 冲突/过期：`memory_update`（supersede）、`memory_archive`、`memory_rollback`，旧版本保留在 `.history/` / `archive/`。
 - `memory_expand`：通过 `ctx.sessionQuery` 展开原始 session 事件。
 
+### Fixed
+- `memory_archive` 后 `memory_read` 不再返回已归档内容：归档记忆只保留在 `archive/` / meta 中，可通过 `memory_rollback` 恢复，但常规 `memory_read` 返回 `not_found`。
+
 ## [0.1.0] - 2026-08-14
 
 ### Added

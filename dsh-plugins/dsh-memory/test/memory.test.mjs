@@ -71,6 +71,28 @@ test("memory_write creates a fact and memory_read returns it", async () => {
 	expect(r.content).toContain("CLI 测试事实");
 });
 
+test("memory_archive hides archived fact from memory_read", async () => {
+	await tool("memory_write").execute({
+		topic: "archive-me",
+		entry_type: "fact",
+		content: "这条应该归档后不可读",
+		evidence: "unit test",
+		namespace: "test",
+	});
+	const before = await tool("memory_read").execute({ name: "archive-me", namespace: "test" });
+	expect(before.not_found).not.toBe(true);
+
+	const ar = await tool("memory_archive").execute({ topic: "archive-me", entry_type: "fact", namespace: "test" });
+	expect(ar.archived).toBe(true);
+
+	const after = await tool("memory_read").execute({ name: "archive-me", namespace: "test" });
+	expect(after.not_found).toBe(true);
+	expect(after.content).toBe("");
+
+	const list = await tool("memory_list").execute({ namespace: "test" });
+	expect(list.facts).not.toContain("archive-me");
+});
+
 test("memory_index rebuilds L1 auto segment", async () => {
 	await tool("memory_write").execute({
 		topic: "index-fact",
