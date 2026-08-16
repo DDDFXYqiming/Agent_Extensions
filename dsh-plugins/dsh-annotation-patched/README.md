@@ -41,13 +41,12 @@ v2026-08-14 曾改为「拼稿即清」（`attachAndSend` 里 setDraft 后立即
 
 ## 安装
 
-本目录供 `Agent_Extensions` 仓库维护；本机 web profile 使用 link 依赖指向本目录：
+从 GitHub 安装（推荐）：
 
 ```bash
-# package.json dependencies 中：
-# "@dsh-external/dsh-annotation-patched": "link:<repo_root>/dsh-plugins/dsh-annotation-patched"
-# 或从本地目录安装：
-dsh plugin --profile web add <repo_root>/dsh-plugins/dsh-annotation-patched
+dsh plugin --profile web add github:DDDFXYqiming/dsh-annotation-patched
+# 本地开发时也可直接使用仓库目录
+dsh plugin --profile web add <本目录>
 ```
 
 ## 已知边界

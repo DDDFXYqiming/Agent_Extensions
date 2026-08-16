@@ -34,8 +34,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DDDFXYqiming/Agent_Extensions.git",
-    "directory": "dsh-plugins/dsh-annotation-patched"
+    "url": "git+https://github.com/DDDFXYqiming/dsh-annotation-patched.git",
+
   },
   "dsh": {
     "bundle": {
