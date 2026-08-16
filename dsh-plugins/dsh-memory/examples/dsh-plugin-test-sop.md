@@ -5,7 +5,7 @@
 DSH 插件改动后的自测流程（无需重启 GUI 宿主）。
 
 ## 关键前置
-- `dsh --profile headless "<任务>"` 存在：一次性任务模式，跑完打印结果退出（C:\Users\39795\.dsh\profiles\headless，dsh-base + dsh-headless + dsh-memory）
+- `dsh --profile headless "<任务>"` 存在：一次性任务模式，跑完打印结果退出（C:\Users\<user>\.dsh\profiles\headless，dsh-base + dsh-headless + dsh-memory）
 - headless 无 GUI/HTTP，适合验证插件逻辑、注入、工具链路
 
 ## 稳定步骤（改插件后按序执行）

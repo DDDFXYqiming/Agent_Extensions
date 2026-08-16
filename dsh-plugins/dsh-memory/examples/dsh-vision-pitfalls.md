@@ -4,7 +4,7 @@ dsh-vision-skill 插件开发与运行踩坑实录（2026-08-13 全天实测）�
 
 ## 关键前置
 - 插件本体零框架补丁；"输入框贴图"依赖宿主源码补丁（vision-patch 4 处：apiproxy 门禁放行 ×2 + llm-deepseek 图片→路径占位 ×2）
-- 补丁被 DSH 包升级覆盖后，用 `C:\Users\39795\.dsh\vision-patch\reapply-vision-patch.ps1` 一键恢复
+- 补丁被 DSH 包升级覆盖后，用 `C:\Users\<user>\.dsh\vision-patch\reapply-vision-patch.ps1` 一键恢复
 
 ## 典型坑
 1. **还原补丁 = 会话历史图片块直接炸**：UNSUPPORTED_CONTENT 拒绝每轮请求（历史里的 image block 还在）——方案切换前先开新会话
