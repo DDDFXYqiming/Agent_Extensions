@@ -35,6 +35,8 @@ export async function ensureOcrServer({
   pooling = 'mean',
   batchSize = 2048,
   ubatchSize = 2048,
+  contextSize = 8192,
+  parallelSlots = 1,
 } = {}) {
   if (await isOcrServerUp({ baseUrl })) {
     return { started: false, reason: 'already-up' }
@@ -48,7 +50,8 @@ export async function ensureOcrServer({
     '-m', join(modelDir, modelFile),
     '--mmproj', join(modelDir, mmprojFile),
     '--alias', 'deepseek-ocr',
-    '-c', '8192',
+    '-c', String(contextSize),
+    '-np', String(parallelSlots),
     '-n', '1024',
   ]
   if (embeddings) {

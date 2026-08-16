@@ -7,7 +7,7 @@
 | 项目 | 状态 |
 |---|---|
 | 插件目录 | `<repo_root>\dsh-plugins\dsh-ocr1-memory` |
-| 测试数量 | `npm test` 46/46 通过 |
+| 测试数量 | `npm test` 47/47 通过 |
 | 真实 OCR 后端 | llama-server `http://127.0.0.1:18080/v1` |
 | 真实 Embedding 后端 | llama-server `http://127.0.0.1:18084/v1`（`--embeddings --pooling mean -ub 2048`） |
 | 模型 | DeepSeek-OCR Q4_K_M + mmproj q8_0 |
@@ -27,6 +27,7 @@
 - `ocr1_mem_render_test`
 - `ocr1_mem_embed_test`
 - 真实 DeepSeek-OCR 1280 维视觉 embedding 存储
+- 视觉 embedding 相似度作为主检索信号（`embeddingRetrieval`）
 - 直接视觉 token 数测量（marker-only embeddings 请求）
 - SoM 分段渲染
 - 年龄衰减（vivid/normal/fuzzy 对应 1280/1024/640）
@@ -44,10 +45,10 @@
 - 核心单元测试：8
 - 复杂隔离测试 T1–T24：24
 - OCR HTTP / 渲染缓存：2
-- Embedding 测试 E1–E4：4
+- Embedding 测试 E1–E5：5
 - OCR server 生命周期：2
 - Robustness 测试 M1–M6：6
-- 合计：46
+- 合计：47
 
 ## 对比结果（dsh-ocr1-memory vs dsh-memory）
 
@@ -64,7 +65,7 @@
 
 1. 视觉 token 数现为“直接测量”：通过 embeddings 端点只发 media marker（无可见文本）得到 `prompt_tokens`，再减空文本基线；比之前近似更接近 DeepEncoder 纯视觉 token 数，但仍依赖 llama.cpp 的 token 统计接口，不是论文 DeepEncoder 内部的逐层输出。
 2. LoRA 微调 DeepSeek-OCR 做 SoM 编号检索：按目标要求**不需要做**。
-3. optical memory 已存储**真实 DeepSeek-OCR 1280 维视觉 embedding**（`visualMemory.embedding`，来源 `deepseek-ocr-embeddings`）；无 embeddings 后端时保留 64 维图像派生 embedding 作为降级。
+3. optical memory 已存储**真实 DeepSeek-OCR 1280 维视觉 embedding**（`visualMemory.embedding`，来源 `deepseek-ocr-embeddings`），并已作为主检索信号（`embeddingRetrieval`）；无 embeddings 后端时保留 64 维图像派生 embedding 作为降级。
 4. DSH 级 R1–R6 已用修正后的 `scripts/compare-memory.mjs` 完整重跑；core 层 T18/T19 亦通过。
 
 ## 安全说明

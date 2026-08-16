@@ -4,7 +4,8 @@ param(
   [string]$ModelDir = $env:OCR1_MODEL_DIR,
   [string]$Server = $env:OCR1_LLAMA_SERVER,
   [int]$Port = 18080,
-  [switch]$Embeddings
+  [switch]$Embeddings,
+  [int]$ContextSize = 8192
 )
 
 if ([string]::IsNullOrWhiteSpace($ModelDir)) { throw "ModelDir 未指定：请用 -ModelDir 或设置 OCR1_MODEL_DIR" }
@@ -17,7 +18,8 @@ if (-not (Test-Path $server)) { throw "llama-server not found: $server" }
 if (-not (Test-Path $model)) { throw "model not found: $model" }
 if (-not (Test-Path $mmproj)) { throw "mmproj not found: $mmproj" }
 
-$args = @('--host', '127.0.0.1', '--port', [string]$Port, '-m', $model, '--mmproj', $mmproj, '--alias', 'deepseek-ocr', '-c', '8192', '-n', '1024')
+$ctx = if ($Embeddings -and $ContextSize -eq 8192) { 2048 } else { $ContextSize }
+$args = @('--host', '127.0.0.1', '--port', [string]$Port, '-m', $model, '--mmproj', $mmproj, '--alias', 'deepseek-ocr', '-c', [string]$ctx, '-np', '1', '-n', '1024')
 if ($Embeddings) {
   $args += @('--embeddings', '--pooling', 'mean', '-b', '2048', '-ub', '2048')
 }
