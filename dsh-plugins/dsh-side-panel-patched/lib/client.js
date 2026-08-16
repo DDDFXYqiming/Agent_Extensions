@@ -48703,8 +48703,8 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 		const FILE_BROWSER_ROUTE = "/side-panel/api";
 		//#endregion
 		//#region src/client/index.ts
-		// PATCH(2026-08-14v3): 追加 'layout' 服务注入（官方 details 列开关 ctx.layout）
-		const inject = ["sessions", "workspaces", "layout"];
+		// [spec-audit 2026-08-17] 移除未实际使用的 'layout' 服务注入
+		const inject = ["sessions", "workspaces"];
 		const fishRoots = /* @__PURE__ */ new Map();
 		function createFishLogo() {
 			const host = document.createElement("span");

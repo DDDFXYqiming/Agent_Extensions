@@ -1,7 +1,8 @@
+import { realpathSync } from "node:fs";
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { dirname, extname, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 // [spec-audit 2026-08-14] Schemastery 配置系统：加载期校验 + 默认值填充（config.md），
 // 与 cordis.patch.yml 解耦——默认值单一来源（schema），用户覆盖仍走 bundle config。
 import Schema from "@deepseek-ai/schemastery";
@@ -26,10 +27,18 @@ const HIDDEN = /* @__PURE__ */ new Set([".git", "node_modules"]);
 const execFileAsync = promisify(execFile);
 function inside(root, input = "") {
 	const absolute = resolve(root, input || ".");
-	const path = relative(root, absolute);
+	const realRoot = realpathSync(root);
+	const realParent = realpathSync(dirname(absolute));
+	let real = resolve(realParent, basename(absolute));
+	try {
+		real = realpathSync(real);
+	} catch {
+		// 目标不存在时保持基于真实父目录的路径，仍可安全用于新建文件。
+	}
+	const path = relative(realRoot, real);
 	if (path === ".." || path.startsWith(`..${sep}`) || resolve(path) === path) throw new Error("path is outside the configured workspace");
 	return {
-		absolute,
+		absolute: real,
 		path: path.split(sep).join("/")
 	};
 }
