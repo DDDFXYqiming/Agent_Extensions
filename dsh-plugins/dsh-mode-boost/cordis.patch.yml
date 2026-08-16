@@ -1,5 +1,0 @@
-# dsh-mode-boost bundle 层：插入插件行（与 dsh-super-injector 同形态）。
-- insert:
-    - id: mode-boost
-      name: '@dsh-external/dsh-mode-boost'
-      config: {}
