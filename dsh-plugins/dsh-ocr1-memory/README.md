@@ -56,6 +56,7 @@
     ocrEmbeddingAutoStart: false       # true 时自动拉起 embeddings 专用 llama-server
     ocrEmbeddingPort: 18084            # embeddings 专用服务端口
     ocrEmbeddingUbatchSize: 2048       # 必须 >= 单图视觉 token 数（默认 512 会拒大图）
+    sharedStore: false                 # true 时每次操作前重读 memories.json，支持多 Agent 共享同一 store
 ```
 
 ## 安装
@@ -115,7 +116,7 @@ llama-server.exe --host 127.0.0.1 --port 18084 --embeddings --pooling mean \
 
 ```bash
 npm run build        # node --check
-npm test             # 40 项测试（含复杂隔离测试 + 真实 OCR/embedding，若后端在线）
+npm test             # 46 项测试（含复杂隔离测试 + 真实 OCR/embedding + robustness，若后端在线）
 npm run test:smoke   # 本地端到端冒烟（真实 Python 渲染 + mock OCR）
 node scripts/compare-memory.mjs  # 对比 dsh-ocr1-memory vs dsh-memory（隔离临时环境）
 dsh --profile headless --dump-config   # 检查插件层已装配
@@ -128,9 +129,12 @@ dsh --profile headless --dump-config   # 检查插件层已装配
 - [x] 压缩比指标与 OCR 文本基线校准（`ocr1_mem_metrics` / `ocr1_mem_calibrate`）
 - [x] 显式记忆更新（`ocr1_mem_update`，冲突消解）
 - [x] 自动确保 OCR 服务在线（`autoStartOcrServer`）
-- [x] 对比 dsh-memory 的隔离基准（R1–R6 完成；R5 dsh-ocr1-memory PASS、dsh-memory FAIL）
+- [x] 对比 dsh-memory 的隔离基准（R1–R6 已用修正后脚本完整重跑；dsh-ocr1-memory 全部 PASS）
 - [x] 真实 DeepSeek-OCR 视觉 embedding 存储（1280 维，`visualMemory.embedding`）
 - [x] 直接视觉 token 测量（embeddings 端点 marker-only 请求，`visualMemory.visualTokensDirect`）
+- [x] 多 Agent 共享 store（`sharedStore` + reload + 原子保存）
+- [x] 图像缺失 / 渲染缓存损坏自动恢复
+- [x] 超长输入边界测试
 - [ ] 记忆命中热度驱动的动态衰减策略
 - [ ] 自动注入 `/context` 让 Agent 每轮看到记忆摘要
 

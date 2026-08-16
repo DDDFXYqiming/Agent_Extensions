@@ -52,10 +52,10 @@
 | R2 | PASS | PASS |
 | R3 | PASS | PASS |
 | R4 | PASS | PASS |
-| R5 | PASS | FAIL（归档后仍可被 `memory_read` 读到） |
+| R5 | PASS | 本次脚本 PASS；此前手动验证曾 FAIL（归档后仍可被 `memory_read` 读到），行为不稳定 |
 | R6 | PASS | PASS |
 
-结论：dsh-ocr1-memory 未出现落后于 dsh-memory 的情况；在 R5 上反而更符合“选择性遗忘”的通用通过标准。
+结论：dsh-ocr1-memory 未出现落后于 dsh-memory 的情况；dsh-memory 的 R5 结果受 Agent 选择“物理删除/归档”影响，存在不稳定性。
 
 ## 5. 参考链接
 

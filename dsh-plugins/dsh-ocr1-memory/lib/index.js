@@ -58,6 +58,7 @@ export const Config = Schema.object({
   ocrEmbeddingUbatchSize: Schema.number().default(2048),
   ocrEmbeddingServerPath: Schema.string().default(''),
   ocrEmbeddingModelDir: Schema.string().default(''),
+  sharedStore: Schema.boolean().default(false),
 })
 
 export function apply(ctx, config = {}) {
@@ -85,6 +86,7 @@ export function apply(ctx, config = {}) {
     ocrEmbeddingUbatchSize: Number(config.ocrEmbeddingUbatchSize ?? 2048),
     ocrEmbeddingServerPath: config.ocrEmbeddingServerPath || process.env.OCR_EMBEDDING_SERVER_PATH || '',
     ocrEmbeddingModelDir: config.ocrEmbeddingModelDir || process.env.OCR_EMBEDDING_MODEL_DIR || '',
+    sharedStore: Boolean(config.sharedStore),
   }
 
   mkdirSync(cfg.storeDir, { recursive: true })
@@ -119,6 +121,7 @@ export function apply(ctx, config = {}) {
     tiers: DEFAULT_TIERS,
     requireOcr: cfg.requireOcr,
     textOnlyPromptTokens: cfg.ocrTextOnlyPromptTokens,
+    shared: cfg.sharedStore,
   })
 
   if (cfg.autoStartOcrServer && cfg.ocrBaseUrl) {
