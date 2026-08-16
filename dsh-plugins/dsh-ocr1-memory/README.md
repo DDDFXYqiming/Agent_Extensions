@@ -62,7 +62,7 @@
     ocrEmbeddingUbatchSize: 2048       # 必须 >= 单图视觉 token 数（默认 512 会拒大图）
     ocrEmbeddingServerPath: ''         # embeddings 用的 llama-server.exe 路径
     ocrEmbeddingModelDir: ''           # embeddings 用的 GGUF 目录
-    ocrEmbeddingOnDemand: true         # true 时首次使用才拉起 18084，空闲后自动关闭（省显存）
+    ocrEmbeddingOnDemand: true         # 仅当 embedding 使用独立服务时生效；combined 模式下直接复用 18080
     ocrEmbeddingIdleTimeoutMs: 300000  # embedding 服务空闲多少毫秒后自动关闭
     ocrEmbeddingContextSize: 2048      # embedding 服务上下文（不需要长生成，2048 够用）
     sharedStore: false                 # true 时每次操作前重读 memories.json，支持多 Agent 共享同一 store
@@ -151,9 +151,8 @@ llama-server.exe --host 127.0.0.1 --port 18080 --embeddings --pooling mean \
 ## 当前运行服务与后续推进条件
 
 - 当前实际需要的服务：
-  - `18080`：DeepSeek-OCR 普通 OCR 读回；
-  - `18084`：DeepSeek-OCR embeddings（1280 维视觉 embedding / embedding 检索）。
-- 探索残留的 `18081/18082/18083` 已不再需要，`18083` 已关闭。
+  - `18080`：DeepSeek-OCR combined 服务，同时提供 `/v1/chat/completions`（OCR 读回）和 `/v1/embeddings`（1280 维视觉 embedding / embedding 检索）。
+- 不再需要独立的 `18084`；探索残留的 `18081/18082/18083` 已全部关闭。
 - 已验证的推进边界：
   - 无微调让 DeepSeek-OCR 直接输出 SoM 编号：当前 llama.cpp 后端不可靠（输出无关文本），因此论文原版 Locate 需要 LoRA 才能推进。
   - DeepEncoder 内部压缩管线 / 内部逐层 visual token 数：当前 llama.cpp 公开接口无法获取。
