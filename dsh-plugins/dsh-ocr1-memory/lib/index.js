@@ -58,6 +58,9 @@ export const Config = Schema.object({
   ocrEmbeddingUbatchSize: Schema.number().default(2048),
   ocrEmbeddingServerPath: Schema.string().default(''),
   ocrEmbeddingModelDir: Schema.string().default(''),
+  ocrEmbeddingOnDemand: Schema.boolean().default(true),
+  ocrEmbeddingIdleTimeoutMs: Schema.number().default(300000),
+  ocrEmbeddingContextSize: Schema.number().default(2048),
   sharedStore: Schema.boolean().default(false),
   embeddingRetrieval: Schema.boolean().default(true),
 })
@@ -73,11 +76,11 @@ export function apply(ctx, config = {}) {
     requireOcr: config.requireOcr !== undefined ? Boolean(config.requireOcr) : false,
     useMockRenderer: Boolean(config.useMockRenderer),
     autoStartOcrServer: Boolean(config.autoStartOcrServer),
-    ocrServerPath: config.ocrServerPath || process.env.OCR_SERVER_PATH || '',
-    ocrModelDir: config.ocrModelDir || process.env.OCR_MODEL_DIR || '',
+    ocrServerPath: config.ocrServerPath || process.env.OCR_SERVER_PATH || 'D:\\AI_Projects\\models\\llama.cpp\\llama-server.exe',
+    ocrModelDir: config.ocrModelDir || process.env.OCR_MODEL_DIR || 'D:\\AI_Projects\\models\\deepseek-ocr-gguf',
     ocrServerPort: Number(config.ocrServerPort ?? 18080),
     ocrTextOnlyPromptTokens: Number(config.ocrTextOnlyPromptTokens ?? 5),
-    ocrEmbeddingBaseUrl: config.ocrEmbeddingBaseUrl || '',
+    ocrEmbeddingBaseUrl: config.ocrEmbeddingBaseUrl || config.ocrBaseUrl || '',
     ocrEmbeddingApiKey: config.ocrEmbeddingApiKey || '',
     ocrEmbeddingModel: config.ocrEmbeddingModel || '',
     ocrEmbeddingTimeoutMs: Number(config.ocrEmbeddingTimeoutMs ?? 120000),
@@ -85,8 +88,11 @@ export function apply(ctx, config = {}) {
     ocrEmbeddingAutoStart: Boolean(config.ocrEmbeddingAutoStart),
     ocrEmbeddingPort: Number(config.ocrEmbeddingPort ?? 18084),
     ocrEmbeddingUbatchSize: Number(config.ocrEmbeddingUbatchSize ?? 2048),
-    ocrEmbeddingServerPath: config.ocrEmbeddingServerPath || process.env.OCR_EMBEDDING_SERVER_PATH || '',
-    ocrEmbeddingModelDir: config.ocrEmbeddingModelDir || process.env.OCR_EMBEDDING_MODEL_DIR || '',
+    ocrEmbeddingServerPath: config.ocrEmbeddingServerPath || process.env.OCR_EMBEDDING_SERVER_PATH || 'D:\\AI_Projects\\models\\llama.cpp\\llama-server.exe',
+    ocrEmbeddingModelDir: config.ocrEmbeddingModelDir || process.env.OCR_EMBEDDING_MODEL_DIR || 'D:\\AI_Projects\\models\\deepseek-ocr-gguf',
+    ocrEmbeddingOnDemand: config.ocrEmbeddingOnDemand !== undefined ? Boolean(config.ocrEmbeddingOnDemand) : true,
+    ocrEmbeddingIdleTimeoutMs: Number(config.ocrEmbeddingIdleTimeoutMs ?? 300000),
+    ocrEmbeddingContextSize: Number(config.ocrEmbeddingContextSize ?? 2048),
     sharedStore: Boolean(config.sharedStore),
     embeddingRetrieval: config.embeddingRetrieval !== undefined ? Boolean(config.embeddingRetrieval) : true,
   }
@@ -105,7 +111,7 @@ export function apply(ctx, config = {}) {
         noRepeatNgramSize: cfg.ocrNoRepeatNgramSize || 0,
       })
     : null
-  const embedding = cfg.ocrEmbeddingBaseUrl
+  const rawEmbedding = cfg.ocrEmbeddingBaseUrl
     ? createEmbeddingHttpClient({
         baseUrl: cfg.ocrEmbeddingBaseUrl,
         apiKey: cfg.ocrEmbeddingApiKey,
@@ -114,6 +120,62 @@ export function apply(ctx, config = {}) {
         emptyPromptTokens: cfg.ocrEmbeddingEmptyPromptTokens,
       })
     : null
+  let embedding = rawEmbedding
+  let embeddingManagedPid = null
+  let embeddingEnsurePromise = null
+  let embeddingIdleTimer = null
+
+  async function ensureEmbeddingServer() {
+    if (!rawEmbedding) return
+    if (embeddingEnsurePromise) return embeddingEnsurePromise
+    embeddingEnsurePromise = ensureOcrServer({
+      baseUrl: cfg.ocrEmbeddingBaseUrl,
+      port: cfg.ocrEmbeddingPort,
+      serverPath: cfg.ocrEmbeddingServerPath,
+      modelDir: cfg.ocrEmbeddingModelDir,
+      embeddings: true,
+      ubatchSize: cfg.ocrEmbeddingUbatchSize,
+      contextSize: cfg.ocrEmbeddingContextSize,
+    }).then((res) => {
+      if (res.started && res.pid) embeddingManagedPid = res.pid
+      return res
+    }).finally(() => {
+      embeddingEnsurePromise = null
+    })
+    return embeddingEnsurePromise
+  }
+
+  function scheduleEmbeddingIdleStop() {
+    if (!cfg.ocrEmbeddingOnDemand || cfg.ocrEmbeddingAutoStart) return
+    if (embeddingIdleTimer) clearTimeout(embeddingIdleTimer)
+    embeddingIdleTimer = setTimeout(async () => {
+      embeddingIdleTimer = null
+      if (embeddingManagedPid) {
+        try { process.kill(embeddingManagedPid) } catch { /* already stopped */ }
+        embeddingManagedPid = null
+      }
+    }, cfg.ocrEmbeddingIdleTimeoutMs)
+  }
+
+  if (rawEmbedding && cfg.ocrEmbeddingOnDemand && !cfg.ocrEmbeddingAutoStart) {
+    const base = rawEmbedding
+    embedding = async (imagePath) => {
+      await ensureEmbeddingServer()
+      try {
+        return await base(imagePath)
+      } finally {
+        scheduleEmbeddingIdleStop()
+      }
+    }
+    embedding.embedText = async (text) => {
+      await ensureEmbeddingServer()
+      try {
+        return await base.embedText(text)
+      } finally {
+        scheduleEmbeddingIdleStop()
+      }
+    }
+  }
 
   const storePromise = createMemoryStore({
     storeDir: cfg.storeDir,
@@ -139,7 +201,7 @@ export function apply(ctx, config = {}) {
       })
     }, 0)
   }
-  if (cfg.autoStartOcrServer && cfg.ocrEmbeddingBaseUrl && cfg.ocrEmbeddingAutoStart) {
+  if (cfg.autoStartOcrServer && cfg.ocrEmbeddingBaseUrl && cfg.ocrEmbeddingBaseUrl !== cfg.ocrBaseUrl && cfg.ocrEmbeddingAutoStart) {
     setTimeout(() => {
       ensureOcrServer({
         baseUrl: cfg.ocrEmbeddingBaseUrl,
@@ -148,7 +210,7 @@ export function apply(ctx, config = {}) {
         modelDir: cfg.ocrEmbeddingModelDir,
         embeddings: true,
         ubatchSize: cfg.ocrEmbeddingUbatchSize,
-        contextSize: 2048,
+        contextSize: cfg.ocrEmbeddingContextSize,
       }).catch((err) => {
         console.error(`[ocr1-memory] auto-start embedding server failed: ${err?.message || err}`)
       })
@@ -542,6 +604,13 @@ export function apply(ctx, config = {}) {
       }
     },
   })), 'ocr1-memory: embed test tool'))
+
+  disposers.push(() => {
+    if (embeddingIdleTimer) clearTimeout(embeddingIdleTimer)
+    if (embeddingManagedPid) {
+      try { process.kill(embeddingManagedPid) } catch { /* already stopped */ }
+    }
+  })
 
   return () => {
     for (const fn of disposers) {

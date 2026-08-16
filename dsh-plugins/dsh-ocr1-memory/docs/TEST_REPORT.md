@@ -9,7 +9,7 @@
 |---|---|
 | 插件目录 | `<Agent_Extensions>\dsh-plugins\dsh-ocr1-memory` |
 | 真实 OCR 后端 | `http://127.0.0.1:18080/v1`（llama-server + DeepSeek-OCR Q4_K_M + mmproj q8_0） |
-| 真实 Embedding 后端 | `http://127.0.0.1:18084/v1`（`--embeddings --pooling mean -ub 2048`） |
+| 真实 Embedding 后端 | 与 OCR 共用 `http://127.0.0.1:18080/v1`（combined `--embeddings --pooling mean`） |
 | 采样参数 | `temperature=0`、`repeat_penalty=1.2`、`no_repeat_ngram_size=30` |
 | 渲染 | Python + Pillow + CJK 字体（微软雅黑/黑体） |
 | 隔离方式 | 每个测试 `mkdtemp` 独立目录，测试结束自动删除 |

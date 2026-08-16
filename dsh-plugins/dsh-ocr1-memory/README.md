@@ -52,16 +52,19 @@
     ocrServerPath: ''            # llama-server.exe 路径；留空用默认值
     ocrModelDir: ''              # DeepSeek-OCR GGUF 目录；留空用默认值
     ocrServerPort: 18080         # OCR 服务端口
-    ocrEmbeddingBaseUrl: ''      # DeepSeek-OCR embeddings 端点（llama-server --embeddings --pooling mean）
+    ocrEmbeddingBaseUrl: ''      # 通常与 ocrBaseUrl 相同（combined 模式）；留空自动回退到 ocrBaseUrl
     ocrEmbeddingApiKey: ''
     ocrEmbeddingModel: ''        # 留空则使用 ocrModel
     ocrEmbeddingTimeoutMs: 120000
     ocrEmbeddingEmptyPromptTokens: 1  # 空文本 embedding 的 prompt_tokens 基线
-    ocrEmbeddingAutoStart: false       # true 时自动拉起 embeddings 专用 llama-server
-    ocrEmbeddingPort: 18084            # embeddings 专用服务端口
+    ocrEmbeddingAutoStart: false       # 仅当 embedding 使用独立服务时才需要 true
+    ocrEmbeddingPort: 18084            # 独立 embedding 服务端口（combined 模式不使用）
     ocrEmbeddingUbatchSize: 2048       # 必须 >= 单图视觉 token 数（默认 512 会拒大图）
     ocrEmbeddingServerPath: ''         # embeddings 用的 llama-server.exe 路径
     ocrEmbeddingModelDir: ''           # embeddings 用的 GGUF 目录
+    ocrEmbeddingOnDemand: true         # true 时首次使用才拉起 18084，空闲后自动关闭（省显存）
+    ocrEmbeddingIdleTimeoutMs: 300000  # embedding 服务空闲多少毫秒后自动关闭
+    ocrEmbeddingContextSize: 2048      # embedding 服务上下文（不需要长生成，2048 够用）
     sharedStore: false                 # true 时每次操作前重读 memories.json，支持多 Agent 共享同一 store
     embeddingRetrieval: true           # true 时使用 1280 维视觉 embedding 相似度作为检索主信号（配合 ocrEmbeddingBaseUrl）
 ```
@@ -108,20 +111,20 @@ powershell -File scripts/start-ocr-server.ps1
 
 ### 真实视觉 embedding（DeepSeek-OCR embeddings 端点）
 
-llama.cpp 的 `/v1/embeddings` 支持多模态输入（`prompt_string` + `multimodal_data`）。用以下命令启动 embeddings 专用服务（需 `-ub` 大于单图视觉 token 数，默认 512 会拒绝大图）：
+llama.cpp 的 `/v1/embeddings` 支持多模态输入（`prompt_string` + `multimodal_data`）。当前构建的 `llama-server` 在 `--embeddings --pooling mean` 下**同时提供 `/v1/chat/completions` 和 `/v1/embeddings`**，所以只需要一个服务即可同时做 OCR 和视觉 embedding：
 
 ```bash
-# 方式一：使用 start-ocr-server.ps1 的 -Embeddings 开关
-powershell -File scripts/start-ocr-server.ps1 -Embeddings -Port 18084
+# 方式一：使用 start-ocr-server.ps1（已默认启用 combined 模式）
+powershell -File scripts/start-ocr-server.ps1 -Port 18080
 
-# 方式二：手动启动（embedding 服务不需要长生成上下文，用 -c 2048 省显存；单槽 -np 1）
-llama-server.exe --host 127.0.0.1 --port 18084 --embeddings --pooling mean \
+# 方式二：手动启动（需 -ub 大于单图视觉 token 数，默认 512 会拒绝大图）
+llama-server.exe --host 127.0.0.1 --port 18080 --embeddings --pooling mean \
   -m <model_dir>\deepseek-ocr-Q4_K_M.gguf \
   --mmproj <model_dir>\mmproj-deepseek-ocr-q8_0.gguf \
-  --alias deepseek-ocr -c 2048 -np 1 -n 1024 -b 2048 -ub 2048
+  --alias deepseek-ocr -c 8192 -np 1 -n 1024 -b 2048 -ub 2048
 ```
 
-然后把 `ocrEmbeddingBaseUrl` 配成 `http://127.0.0.1:18084/v1`。插件会为每条记忆存储 **1280 维真实视觉 embedding**，并报告“直接视觉 token 数”（仅用 media marker 请求，`prompt_tokens - 空文本基线`）。
+然后把 `ocrEmbeddingBaseUrl` 配成与 `ocrBaseUrl` 相同的 `http://127.0.0.1:18080/v1`（不配置时也会自动回退到 `ocrBaseUrl`）。插件会为每条记忆存储 **1280 维真实视觉 embedding**，并报告“直接视觉 token 数”（仅用 media marker 请求，`prompt_tokens - 空文本基线`）。
 
 ## 与 DeepSeek OCR1 论文的差距
 

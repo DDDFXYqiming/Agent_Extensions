@@ -18,10 +18,8 @@ if (-not (Test-Path $server)) { throw "llama-server not found: $server" }
 if (-not (Test-Path $model)) { throw "model not found: $model" }
 if (-not (Test-Path $mmproj)) { throw "mmproj not found: $mmproj" }
 
-$ctx = if ($Embeddings -and $ContextSize -eq 8192) { 2048 } else { $ContextSize }
-$args = @('--host', '127.0.0.1', '--port', [string]$Port, '-m', $model, '--mmproj', $mmproj, '--alias', 'deepseek-ocr', '-c', [string]$ctx, '-np', '1', '-n', '1024')
-if ($Embeddings) {
-  $args += @('--embeddings', '--pooling', 'mean', '-b', '2048', '-ub', '2048')
-}
+# One combined server serves both OCR (/v1/chat/completions) and embeddings
+# (/v1/embeddings); --embeddings --pooling mean is always enabled.
+$args = @('--host', '127.0.0.1', '--port', [string]$Port, '-m', $model, '--mmproj', $mmproj, '--alias', 'deepseek-ocr', '-c', [string]$ContextSize, '-np', '1', '-n', '1024', '--embeddings', '--pooling', 'mean', '-b', '2048', '-ub', '2048')
 Write-Host "Starting DeepSeek-OCR llama-server on port $Port ..."
 & $server @args

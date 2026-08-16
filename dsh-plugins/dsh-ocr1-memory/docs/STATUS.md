@@ -9,7 +9,7 @@
 | 插件目录 | `<repo_root>\dsh-plugins\dsh-ocr1-memory` |
 | 测试数量 | `npm test` 47/47 通过 |
 | 真实 OCR 后端 | llama-server `http://127.0.0.1:18080/v1` |
-| 真实 Embedding 后端 | llama-server `http://127.0.0.1:18084/v1`（`--embeddings --pooling mean -ub 2048`） |
+| 真实 Embedding 后端 | 与 OCR 共用 `http://127.0.0.1:18080/v1`（combined `--embeddings --pooling mean`） |
 | 模型 | DeepSeek-OCR Q4_K_M + mmproj q8_0 |
 | 自动拉起 | `lib/ocr-server.js` + `autoStartOcrServer` / `ocrEmbeddingAutoStart` 配置 |
 | 对比基准 | `docs/BENCHMARK.md`、`scripts/compare-memory.mjs`（R1–R6 已用修正后脚本完整重跑） |
