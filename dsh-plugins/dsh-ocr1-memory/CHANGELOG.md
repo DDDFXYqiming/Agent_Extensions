@@ -88,3 +88,4 @@
 - `docs/BENCHMARK.md`
 - `docs/STATUS.md`
 - `CHANGELOG.md`
+- 记录 SoM locate 实验限制、当前运行服务、后续可推进条件
