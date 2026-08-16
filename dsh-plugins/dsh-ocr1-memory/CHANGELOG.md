@@ -51,6 +51,9 @@
 - 测试规范调研
   - `docs/TEST_SPEC.md`：MemoryAgentBench / LongMemEval / LoCoMo / AMB 映射到 R1–R6
 
+### Changed
+- 默认模型切换为 `deepseek-ocr-Q4_K_M.gguf` + `mmproj-deepseek-ocr-q8_0.gguf`，降低显存占用；`lib/ocr-server.js` 与 `scripts/start-ocr-server.ps1` 同步更新。
+
 ### Fixed
 - 检索打分污染：片段级得分不再被整条记忆聚合分抬高
 - 并发 active recall 渲染竞争（EBUSY）
