@@ -10,11 +10,11 @@ DSH Web「选中引用」插件的本地增强版（fork 维护）。
 
 ## 增强内容（相对上游 v1.3.13）
 
-### 1. 空引用 = 引用（单选按钮制）
+### 1. 空引用 = 引用（单按钮制）
 
 选中助手消息文字 → 点「**引用**」→ 引用可留空直接保存 = 纯引用（仅标记原文），与 Codex 的 Add to chat 一致。
 
-- 工具栏仅保留「引用」按钮（v2026-08-14c 起移除临时加的「引用」按钮——空引用由引用按钮的 `note=''` 路径承担，功能等价）
+- 工具栏仅保留「引用」按钮（v2026-08-14c 起移除临时加的「空引用」按钮——空引用由引用按钮的 `note=''` 路径承担，功能等价）
 - **显式确认制**：任何选中动作（复制、双击阅读选词）都不会自动成为引用——必须点击「引用」按钮（杜绝幽灵引用）
 - 同文本去重沿用上游规则（已在清单中的文字按钮禁用）
 - 曾尝试「选中即自动引用」方案（选中即暂存快照、回车自动消费），实测误触发严重（复制/阅读选中即被引用），已废弃并回退为按钮制（v2026-08-14b）
@@ -45,9 +45,9 @@ v2026-08-14 曾改为「拼稿即清」（`attachAndSend` 里 setDraft 后立即
 
 ```bash
 # package.json dependencies 中：
-# "@omdsh-dev/dsh-annotation": "link:E:/AI_Projects/Agent_Extensions/dsh-plugins/dsh-annotation-patched"
+# "@dsh-external/dsh-annotation-patched": "link:<repo_root>/dsh-plugins/dsh-annotation-patched"
 # 或从本地目录安装：
-dsh plugin --profile web add E:/AI_Projects/Agent_Extensions/dsh-plugins/dsh-annotation-patched
+dsh plugin --profile web add <repo_root>/dsh-plugins/dsh-annotation-patched
 ```
 
 ## 已知边界
@@ -60,7 +60,7 @@ dsh plugin --profile web add E:/AI_Projects/Agent_Extensions/dsh-plugins/dsh-ann
 ## 维护标记
 
 - 本 fork 所有改动带 `PATCH(2026-08-14)` ~ `PATCH(2026-08-14e)` 注释标记（grep `PATCH(2026-08-14` 可全部定位），上游更新时可快速 diff 重新套用
-- 包名沿用上游 `@omdsh-dev/dsh-annotation`（本机 link 维护自洽）；**若计划发布到 npm，需先改名**（如 `@<owner>/dsh-annotation-patched`）并升版本，避免占用上游同名同版本
+- 包名已改为独立 fork 包名 `@dsh-external/dsh-annotation-patched`（v0.1.0），避免与上游 `@omdsh-dev/dsh-annotation` 发布冲突
 
 ## License
 

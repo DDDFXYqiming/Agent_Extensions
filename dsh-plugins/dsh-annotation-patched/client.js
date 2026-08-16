@@ -32,8 +32,8 @@
 // user bubble（[class*="bubble"]）。
 window.__ModuleLoader__.load({
   // 必须与 package.json "name" 完全一致，否则 client-modules 报：
-  // bundle loaded without registering "@omdsh-dev/dsh-annotation"
-  id: '@omdsh-dev/dsh-annotation',
+  // bundle loaded without registering "@dsh-external/dsh-annotation-patched"
+  id: '@dsh-external/dsh-annotation-patched',
   factory: (require) => {
     'use strict'
     var module = { exports: {} }
@@ -1806,7 +1806,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    exports.name = '@omdsh-dev/dsh-annotation'
+    exports.name = '@dsh-external/dsh-annotation-patched'
     exports.inject = ['sessions', 'conversation']
     exports.apply = apply
 

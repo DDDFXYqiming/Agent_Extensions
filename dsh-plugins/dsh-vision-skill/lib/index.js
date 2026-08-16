@@ -310,6 +310,37 @@ function resolveImagePath(workspace, allowedDirs, raw) {
 	throw new Error(`vision-skill: 路径超出允许范围（工作区 / allowedDirs / 附件目录）: ${raw}`);
 }
 
+/**
+ * 输出路径围栏：解析并校验标注图/结果文件的写入位置必须位于工作区或 allowedDirs 之一。
+ * 与 resolveImagePath 不同，目标文件允许尚不存在；通过 realpath 解析父目录来阻止符号链接逃逸。
+ */
+function resolveOutputPath(workspace, allowedDirs, raw) {
+	if (!raw || typeof raw !== "string") {
+		throw new Error("vision-skill: 缺少输出路径（output）");
+	}
+	const candidate = isAbsolute(raw) ? raw : resolve(workspace, raw);
+	const parentReal = realpathSync(dirname(candidate));
+	let real = resolve(parentReal, basename(candidate));
+	try {
+		real = realpathSync(real);
+	} catch {
+		// 目标不存在时保持基于真实父目录的路径，仍可用于新建文件。
+	}
+	const bases = [workspace, ...allowedDirs];
+	for (const base of bases) {
+		if (!base) continue;
+		let baseReal;
+		try {
+			baseReal = realpathSync(base);
+		} catch {
+			continue;
+		}
+		const rel = relative(baseReal, real);
+		if (rel !== "" && !rel.startsWith("..") && !isAbsolute(rel)) return real;
+	}
+	throw new Error(`vision-skill: 输出路径超出允许范围（工作区 / allowedDirs）: ${raw}`);
+}
+
 /** 会话工作区（与第一方工具一致）。 */
 function sessionWorkspace(exec) {
 	return exec.agent?.session?.header?.cwd ?? process.cwd();
@@ -863,7 +894,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 			const imagePath = resolveImagePath(workspace, cfg.allowedDirs, args.image_path);
 			let output;
 			if (args.output) {
-				const outPath = isAbsolute(args.output) ? args.output : resolve(workspace, args.output);
+				const outPath = resolveOutputPath(workspace, cfg.allowedDirs, args.output);
 				mkdirSync(dirname(outPath), { recursive: true });
 				output = outPath;
 			}
@@ -951,7 +982,7 @@ function createToolDefinitions(ctx, cfg, sem) {
 			const imagePath = resolveImagePath(workspace, cfg.allowedDirs, args.image_path);
 			let output;
 			if (args.output) {
-				const outPath = isAbsolute(args.output) ? args.output : resolve(workspace, args.output);
+				const outPath = resolveOutputPath(workspace, cfg.allowedDirs, args.output);
 				mkdirSync(dirname(outPath), { recursive: true });
 				output = outPath;
 			}
