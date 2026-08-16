@@ -16,7 +16,7 @@
 | `memory_pending` | 查看自动蒸馏候选 |
 | `memory_accept` | 接受 pending 候选入正式记忆 |
 | `memory_update` | 更新记忆（supersede 保留历史快照） |
-| `memory_archive` | 归档记忆（从 L1 索引隐藏，文件保留） |
+| `memory_archive` | 归档记忆（从 L1 索引与 `memory_read` 隐藏，文件保留在 archive/，可用 `memory_rollback` 恢复） |
 | `memory_rollback` | 回滚到 `.history/` 中最近快照 |
 | `memory_expand` | 通过 `sessionQuery` 展开 sourceSession/sourceSeqs 原始事件 |
 | `memory_stats` | 统计 L2/L3/pending/archived/大小 |

@@ -805,8 +805,11 @@ function apply(ctx, config = {}) {
 			for (const c of candidates) {
 				const sopPath = join(root, "sops", `${c}.md`);
 				if (existsSync(sopPath)) {
-					bumpAccess(root, `sop:${c}`);
 					const m = getEntryMeta(root, "sop", c) || {};
+					if (m.archived) {
+						return { name: key, source: "", content: "", namespace: ns, meta: { sourceSession: "", sourceSeqs: [], evidence: "", archived: true, createdAt: "", updatedAt: "" }, not_found: true };
+					}
+					bumpAccess(root, `sop:${c}`);
 					return {
 						name: key,
 						source: `sops/${c}.md`,
@@ -825,8 +828,11 @@ function apply(ctx, config = {}) {
 			}
 			const fact = readFact(root, key);
 			if (fact !== null) {
-				bumpAccess(root, `fact:${key}`);
 				const m = getEntryMeta(root, "fact", key) || {};
+				if (m.archived) {
+					return { name: key, source: "", content: "", namespace: ns, meta: { sourceSession: "", sourceSeqs: [], evidence: "", archived: true, createdAt: "", updatedAt: "" }, not_found: true };
+				}
+				bumpAccess(root, `fact:${key}`);
 				return {
 					name: key,
 					source: "facts.md",
@@ -844,7 +850,13 @@ function apply(ctx, config = {}) {
 			}
 			if (key.includes("sops/")) {
 				const p = join(root, key);
-				if (existsSync(p)) return { name: key, source: key, content: readFileSync(p, "utf8"), namespace: ns, meta: { sourceSession: "", sourceSeqs: [], evidence: "", archived: false, createdAt: "", updatedAt: "" } };
+				if (existsSync(p)) {
+					const slug = basename(p).replace(/\.md$/, "");
+					if (isArchived(root, "sop", slug)) {
+						return { name: key, source: "", content: "", namespace: ns, meta: { sourceSession: "", sourceSeqs: [], evidence: "", archived: true, createdAt: "", updatedAt: "" }, not_found: true };
+					}
+					return { name: key, source: key, content: readFileSync(p, "utf8"), namespace: ns, meta: { sourceSession: "", sourceSeqs: [], evidence: "", archived: false, createdAt: "", updatedAt: "" } };
+				}
 			}
 			return { name: key, source: "", content: "", namespace: ns, meta: { sourceSession: "", sourceSeqs: [], evidence: "", archived: false, createdAt: "", updatedAt: "" }, not_found: true };
 		},
