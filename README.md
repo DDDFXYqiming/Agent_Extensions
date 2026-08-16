@@ -17,7 +17,7 @@
 > dsh plugin --profile web add github:DDDFXYqiming/dsh-ocr1-memory
 > ```
 >
-> 本仓库保留这些插件的历史快照与说明，后续更新请以独立仓库为准。
+> 本仓库**不再维护 dsh 插件**，仅保留历史快照与说明；后续更新请以独立仓库为准。
 
 **DeepSeek Harness（DSH）插件与 AI Agent 技能集合** —— 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的原生插件（走官方扩展接缝，零框架补丁）+ 跨框架通用 Skill + Hermes 插件，开箱即用。
 
