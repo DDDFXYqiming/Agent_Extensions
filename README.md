@@ -7,7 +7,7 @@
 > | 插件 | 独立仓库 |
 > |---|---|
 > | dsh-vision-skill | https://github.com/DDDFXYqiming/dsh-vision-skill |
-> | dsh-memory | https://github.com/DDDFXYqiming/dsh-memory |
+> | dsh-layered-memory | https://github.com/DDDFXYqiming/dsh-layered-memory |
 > | dsh-annotation-patched | https://github.com/DDDFXYqiming/dsh-annotation-patched |
 > | dsh-side-panel-patched | https://github.com/DDDFXYqiming/dsh-side-panel-patched |
 > | dsh-ocr1-memory | https://github.com/DDDFXYqiming/dsh-ocr1-memory |
@@ -34,7 +34,7 @@
 | 插件 | 能力 | 依赖 |
 |---|---|---|
 | `dsh-vision-skill` v0.4.4 | 识图插件：8 个工具（含渐进式暴露激活工具）+ Credential 化 + 路径围栏 | Node.js + DSH（`dsh-tools` / `dsh-credentials`）、Python 3 + Pillow、视觉模型 API Key |
-| `dsh-memory` v0.4 | 跨会话长期记忆：命名空间隔离 + L1 索引注入（存在性编码、KV 缓存友好）+ L2 环境事实 + L3 任务经验 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护 | Node.js + DSH（`dsh-tools`） |
+| `dsh-layered-memory` v0.4 | 跨会话长期记忆：命名空间隔离 + L1 索引注入（存在性编码、KV 缓存友好）+ L2 环境事实 + L3 任务经验 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护 | Node.js + DSH（`dsh-tools`） |
 | `dsh-annotation-patched` | 选中批注/引用插件（fork 增强）：选中助手回复文字 → 批注（可空）或一键「引用」→ 回车随消息发送，回复按 `Annotation N` 逐条对照；增强：Codex 式「引用」按钮（显式确认制）+ 幽灵引用修复 | Node.js + DSH（纯浏览器端 bundle，零 Node 逻辑） |
 | `dsh-side-panel-patched` | 右侧工作区面板（fork 增强）：文件树/多文件 tab/预览/编辑（CodeMirror）+ Git 审查 + 终端；增强：绕开官方 520px 宽度上限、头部像素级对齐、Codex 风格梭形拖拽把手、文件 tab 栈 + 会话跟踪、Windows 终端防崩溃 | Node.js + DSH（文件/Git/终端 API + 浏览器 bundle） |
 | `dsh-ocr1-memory` v0.1.0 | 光学压缩记忆：文本渲染为 SoM 图像存储 + 年龄衰减 + active recall + OCR 驱动召回 | Node.js + DSH（`dsh-tools` / cordis / schemastery）、Python 3 + Pillow、可选 DeepSeek-OCR 后端 |
@@ -65,7 +65,7 @@
 Agent_Extensions/
 ├── dsh-plugins/               # DeepSeek Harness（DSH）原生插件
 │   ├── dsh-vision-skill/      # 识图插件 v0.4.4（8 工具 + 渐进式暴露 + Credential 化）
-│   ├── dsh-memory/            # 分层长期记忆（v0.4：命名空间/自动蒸馏/自动维护）
+│   ├── dsh-layered-memory/    # 分层长期记忆（v0.4：命名空间/自动蒸馏/自动维护）
 │   ├── dsh-annotation-patched/ # 选中批注/引用插件（fork 增强，Codex 式选中即引用）
 │   ├── dsh-side-panel-patched/ # 右侧工作区面板（fork 增强，多文件 tab + 会话跟踪）
 │   └── dsh-ocr1-memory/        # 光学压缩记忆（SoM 图像 + active recall）
@@ -138,7 +138,7 @@ python scripts/vision.py --check
 
 工程化特性：**渐进式工具暴露**（全局只挂 1 个轻量激活工具，省上下文）、**密钥 Credential 化**（`credential: VISION_API_KEY` 引用，每操作解析）、**路径围栏**（realpath 校验防穿越）、**超时与并发门控**、**严格 JSON Schema 结构化输出**。
 
-### dsh-memory v0.4（分层长期记忆）
+### dsh-layered-memory v0.4（分层长期记忆）
 
 | 组件 | 说明 |
 |---|---|
