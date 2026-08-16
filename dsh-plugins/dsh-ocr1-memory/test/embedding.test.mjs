@@ -22,7 +22,7 @@ function tmpStore() {
 
 async function embeddingServerUp() {
   try {
-    const res = await fetch('http://127.0.0.1:18084/health', { signal: AbortSignal.timeout(3000) })
+    const res = await fetch('http://127.0.0.1:18080/health', { signal: AbortSignal.timeout(3000) })
     if (!res.ok) return false
     const json = await res.json()
     return json.status === 'ok'
@@ -182,7 +182,7 @@ test('E4 real DeepSeek-OCR embeddings server stores 1280d visual embedding', { s
       renderCommand: join(process.cwd(), 'scripts', 'render_memory.py'),
     })
     const embedding = createEmbeddingHttpClient({
-      baseUrl: 'http://127.0.0.1:18084/v1',
+      baseUrl: 'http://127.0.0.1:18080/v1',
       model: 'deepseek-ocr',
       timeoutMs: 120000,
       emptyPromptTokens: 1,

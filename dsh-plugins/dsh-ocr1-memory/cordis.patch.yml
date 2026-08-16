@@ -23,5 +23,8 @@
         ocrEmbeddingAutoStart: false
         ocrEmbeddingPort: 18084
         ocrEmbeddingUbatchSize: 2048
+        ocrEmbeddingOnDemand: true
+        ocrEmbeddingIdleTimeoutMs: 300000
+        ocrEmbeddingContextSize: 2048
         sharedStore: false
         embeddingRetrieval: true

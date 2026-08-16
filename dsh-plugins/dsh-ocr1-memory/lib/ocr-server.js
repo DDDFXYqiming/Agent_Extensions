@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_START_SCRIPT = join(PLUGIN_DIR, '..', 'scripts', 'start-ocr-server.ps1')
-const DEFAULT_SERVER = process.env.OCR_SERVER_PATH || ''
+const DEFAULT_SERVER = process.env.OCR_SERVER_PATH || 'D:\\AI_Projects\\models\\llama.cpp\\llama-server.exe'
 
 function healthUrl(baseUrl) {
   const base = String(baseUrl || 'http://127.0.0.1:18080/v1').replace(/\/+$/, '')
@@ -25,7 +25,7 @@ export async function isOcrServerUp({ baseUrl = 'http://127.0.0.1:18080/v1', tim
 
 export async function ensureOcrServer({
   baseUrl = 'http://127.0.0.1:18080/v1',
-  modelDir = process.env.OCR_MODEL_DIR || '',
+  modelDir = process.env.OCR_MODEL_DIR || 'D:\\AI_Projects\\models\\deepseek-ocr-gguf',
   port = 18080,
   serverPath = DEFAULT_SERVER,
   modelFile = 'deepseek-ocr-Q4_K_M.gguf',
@@ -54,11 +54,11 @@ export async function ensureOcrServer({
     '-np', String(parallelSlots),
     '-n', '1024',
   ]
-  if (embeddings) {
-    args.push('--embeddings', '--pooling', pooling)
-    if (batchSize > 0) args.push('-b', String(batchSize))
-    if (ubatchSize > 0) args.push('-ub', String(ubatchSize))
-  }
+  // DeepSeek-OCR with --embeddings --pooling mean serves both /v1/chat/completions
+  // and /v1/embeddings from a single instance, so always start in combined mode.
+  args.push('--embeddings', '--pooling', pooling)
+  if (batchSize > 0) args.push('-b', String(batchSize))
+  if (ubatchSize > 0) args.push('-ub', String(ubatchSize))
   const child = spawn(serverPath, args, { detached: true, stdio: 'pipe', windowsHide: true })
   // Discard output but keep pipes open so the spawned server is not tied to a
   // closed console (Windows quirk observed during auto-restart testing).

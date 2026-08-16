@@ -84,7 +84,7 @@
 - `multimodal_data` 必须是**裸 base64**，不能是 `data:image/png;base64,...`（后者会报 `Failed to load image or audio file`）。
 - 默认 `-ub`（physical batch size）为 512，1024×200 的 SoM 记忆图约 784 视觉 token，会报 `input too large`；需 `-ub 2048`。
 - 实测：
-  - `--embeddings --pooling mean` 启动端口 18084；
+  - 当前 llama.cpp 构建在 `--embeddings --pooling mean` 下**同时支持 `/v1/chat/completions` 和 `/v1/embeddings`**，因此 OCR 与视觉 embedding 可共用同一个 18080 服务；
   - marker-only 请求 `prompt_tokens=785`；
   - 空文本 `input:""` 的 `prompt_tokens=1`；
   - 直接视觉 token = 784，embedding 维度 = 1280；

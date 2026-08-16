@@ -57,6 +57,7 @@
 
 ### Changed
 - 默认模型切换为 `deepseek-ocr-Q4_K_M.gguf` + `mmproj-deepseek-ocr-q8_0.gguf`，降低显存占用；`lib/ocr-server.js` 与 `scripts/start-ocr-server.ps1` 同步更新。
+- 确认当前 llama.cpp 的 `--embeddings --pooling mean` 可同时提供 `/v1/chat/completions` 与 `/v1/embeddings`，因此 OCR 与视觉 embedding 合并为**单个 18080 服务**，不再需要常驻 18084。
 
 ### Fixed
 - 检索打分污染：片段级得分不再被整条记忆聚合分抬高
