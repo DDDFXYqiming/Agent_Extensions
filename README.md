@@ -18,6 +18,7 @@
 | `dsh-memory` v0.4 | 跨会话长期记忆：命名空间隔离 + L1 索引注入（存在性编码、KV 缓存友好）+ L2 环境事实 + L3 任务经验 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护 | Node.js + DSH（`dsh-tools`） |
 | `dsh-annotation-patched` | 选中批注/引用插件（fork 增强）：选中助手回复文字 → 批注（可空）或一键「引用」→ 回车随消息发送，回复按 `Annotation N` 逐条对照；增强：Codex 式「引用」按钮（显式确认制）+ 幽灵引用修复 | Node.js + DSH（纯浏览器端 bundle，零 Node 逻辑） |
 | `dsh-side-panel-patched` | 右侧工作区面板（fork 增强）：文件树/多文件 tab/预览/编辑（CodeMirror）+ Git 审查 + 终端；增强：绕开官方 520px 宽度上限、头部像素级对齐、Codex 风格梭形拖拽把手、文件 tab 栈 + 会话跟踪、Windows 终端防崩溃 | Node.js + DSH（文件/Git/终端 API + 浏览器 bundle） |
+| `dsh-ocr1-memory` v0.1.0 | 光学压缩记忆：文本渲染为 SoM 图像存储 + 年龄衰减 + active recall + OCR 驱动召回 | Node.js + DSH（`dsh-tools` / cordis / schemastery）、Python 3 + Pillow、可选 DeepSeek-OCR 后端 |
 
 ### 2️⃣ 通用技能（General_skills）—— 跨框架可用
 
@@ -47,7 +48,9 @@ Agent_Extensions/
 │   ├── dsh-vision-skill/      # 识图插件 v0.4.4（8 工具 + 渐进式暴露 + Credential 化）
 │   ├── dsh-memory/            # 分层长期记忆（v0.4：命名空间/自动蒸馏/自动维护）
 │   ├── dsh-annotation-patched/ # 选中批注/引用插件（fork 增强，Codex 式选中即引用）
-│   └── dsh-side-panel-patched/ # 右侧工作区面板（fork 增强，多文件 tab + 会话跟踪）
+│   ├── dsh-side-panel-patched/ # 右侧工作区面板（fork 增强，多文件 tab + 会话跟踪）
+│   └── dsh-ocr1-memory/        # 光学压缩记忆（SoM 图像 + active recall）
+
 ├── General_skills/            # 通用智能体技能（跨框架，挂载即用）
 │   ├── vision-skill/          # 识图
 │   ├── video-notes-generator/ # 视频转结构化笔记
