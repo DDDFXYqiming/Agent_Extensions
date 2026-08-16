@@ -117,7 +117,7 @@
 <!-- zh-main-end -->
 
 
-> Architecture rationale (why `import-sources` defaults are asymmetric for in-repo vs out-of-repo files): see [docs/technical-design.md "Project Structure & Lifecycle"](../../../../docs/technical-design.md#project-structure--lifecycle).
+> Architecture rationale (why `import-sources` defaults are asymmetric for in-repo vs out-of-repo files): see design documentation (not bundled with this repo).
 
 Project tools create, validate, and inspect the standard PPT Master workspace.
 

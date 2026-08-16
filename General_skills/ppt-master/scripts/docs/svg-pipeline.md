@@ -209,7 +209,7 @@
 <!-- zh-main-end -->
 
 
-> Architecture rationale (why each artifact / step exists, deletion impact, two-consumer relationship between `svg_finalize/` and native pptx conversion): see [docs/technical-design.md "Post-Processing Pipeline"](../../../../docs/technical-design.md#post-processing-pipeline).
+> Architecture rationale (why each artifact / step exists, deletion impact, two-consumer relationship between `svg_finalize/` and native pptx conversion): see design documentation (not bundled with this repo).
 
 These tools cover post-processing, SVG validation, speaker notes, recorded narration, and PPTX export.
 
