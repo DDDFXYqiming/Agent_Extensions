@@ -36,8 +36,8 @@
 - 实测：
   - `ollama pull deepseek-ocr` 卡在 84%，速度降至 100KB/s，放弃。
   - 使用 aria2c 多线程从 `hf-mirror.com` 下载成功，速度可达数 MB/s。
-  - `sabafallah` 的 Q4_K_M 在 llama.cpp CLI 中触发崩溃，可能属于 PR 分支转换。
-  - `ggml-org` 的 Q8_0 + mmproj Q8_0 通过 `llama-server` 稳定运行。
+  - `sabafallah` 的 Q4_K_M 在 llama.cpp CLI 中触发崩溃，可能属于 PR 分支转换；但 `llama-server` 下可稳定运行。
+  - 当前使用 `sabafallah` 的 `deepseek-ocr-Q4_K_M.gguf` + `mmproj-deepseek-ocr-q8_0.gguf` 通过 `llama-server` 稳定运行。
 
 ## 4. llama.cpp / AMD 路线
 
@@ -45,7 +45,7 @@
 - 路径：`<models>\llama.cpp\`、`<models>\llama.cpp-cpu\`
 - 运行：
   - `llama-server` 监听 `127.0.0.1:18080`
-  - 使用 `DeepSeek-OCR-Q8_0.gguf` + `mmproj-official-q8_0.gguf`
+  - 使用 `deepseek-ocr-Q4_K_M.gguf` + `mmproj-deepseek-ocr-q8_0.gguf`（更省显存）
 - 关键参数：
   - 必须使用 `\nFree OCR.` 风格 prompt
   - 必须加 `repeat_penalty` 和 `no_repeat_ngram_size` 防止重复输出
@@ -69,8 +69,8 @@
 - 当前启动命令：
   ```
   llama-server.exe --host 127.0.0.1 --port 18080 \
-    -m DeepSeek-OCR-Q8_0.gguf \
-    --mmproj mmproj-official-q8_0.gguf \
+    -m deepseek-ocr-Q4_K_M.gguf \
+    --mmproj mmproj-deepseek-ocr-q8_0.gguf \
     --alias deepseek-ocr -c 8192 -n 1024
   ```
 
