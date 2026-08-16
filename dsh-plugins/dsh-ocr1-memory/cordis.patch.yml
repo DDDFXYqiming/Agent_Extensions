@@ -23,3 +23,4 @@
         ocrEmbeddingAutoStart: false
         ocrEmbeddingPort: 18084
         ocrEmbeddingUbatchSize: 2048
+        sharedStore: false

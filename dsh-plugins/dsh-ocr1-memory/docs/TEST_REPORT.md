@@ -18,12 +18,13 @@
 
 | 套件 | 结果 |
 |---|---|
-| `npm test`（已固化） | 40/40 通过 |
+| `npm test`（已固化） | 46/46 通过 |
 | 核心单元测试 | 8/8 通过 |
 | 复杂隔离测试（T1–T24） | 24/24 通过 |
 | OCR HTTP / 渲染缓存测试 | 2/2 通过 |
 | Embedding 测试（E1–E4） | 4/4 通过 |
 | OCR server 生命周期测试 | 2/2 通过 |
+| Robustness 测试（M1–M6） | 6/6 通过 |
 | 真实 OCR / Embedding 隔离测试 | PASS（T6/T15/T16/T21/T23/T24/E4，依赖 llama-server） |
 
 ## 单元测试覆盖
@@ -127,6 +128,17 @@ content: "Orbit API 需要登录并携带 token。"
 | T23 | optical memory 存储 visual token 元数据 | PASS |
 | T24 | 渲染图像生成并存储视觉 embedding（无 embeddings 后端时为 64 维像素 embedding） | PASS |
 
+## Robustness 测试覆盖（M1–M6）
+
+| ID | 场景 | 结果 |
+|---|---|---|
+| M1 | 多 Agent 共享 store：两个 store 实例通过 reload 互相看到新增记忆 | PASS |
+| M2 | 原子保存：多次写入后无 `.tmp` 残留 | PASS |
+| M3 | 图像文件丢失后自动重新渲染恢复 | PASS |
+| M4 | 渲染缓存损坏（缓存路径被替换为目录）时回退到全新渲染 | PASS |
+| M5 | 超长多段落输入（>200KB）分段存储并检索命中目标 | PASS |
+| M6 | 超长单段落（约 250KB）切分后无数据丢失 | PASS |
+
 ## 已发现并修复的问题（第二轮）
 
 ### 并发 active recall 渲染竞争（T12 暴露）
@@ -172,15 +184,16 @@ content: "Orbit API 需要登录并携带 token。"
 - 设计文档：`docs/BENCHMARK.md`
 - 执行脚本：`scripts/compare-memory.mjs`
 - 隔离环境：两个临时 store + `--patch` 互斥禁用插件
-- 结果：R1–R4 全部通过；R5 dsh-ocr1-memory PASS、dsh-memory FAIL（归档后仍可读到）；R6 两者 PASS。dsh-ocr1-memory 在对比中使用完整 OCR + embedding 配置，未出现落后于 dsh-memory 的情况。
+- 结果：已用修正后的 `scripts/compare-memory.mjs` 完整重跑 R1–R6；dsh-ocr1-memory 全部 PASS，dsh-memory 本次也全部 PASS（R5 此前手动验证曾 FAIL，行为不稳定）。dsh-ocr1-memory 未出现落后于 dsh-memory 的情况。
 
 ## 后续计划
 
 - [x] 固化复杂测试脚本为 `test/complex.test.mjs` 并纳入 `npm test`
 - [x] 自动拉起 OCR 服务（`lib/ocr-server.js` + `autoStartOcrServer`）
 - [x] 对比基准脚本 `scripts/compare-memory.mjs`
-- [ ] 多 Agent 共享 store
-- [ ] 图像缺失/缓存损坏恢复测试
-- [ ] 超长输入（10MB）与内存边界
+- [x] 多 Agent 共享 store（`sharedStore` + reload + 原子保存）
+- [x] 图像缺失/缓存损坏恢复测试
+- [x] 超长输入边界测试（>200KB 多段落 + 超长单段落）
+- [ ] 超长输入（10MB）与内存压力
 - [ ] LoRA 微调：**按目标要求不需要做**
 - [x] 直接视觉 token 数：通过 embeddings 端点 marker-only 请求测量（`visualMemory.visualTokensDirect`）

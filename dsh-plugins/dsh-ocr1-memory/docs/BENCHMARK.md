@@ -93,18 +93,18 @@ dsh --profile headless \
 
 | 任务 | dsh-ocr1-memory | dsh-memory |
 |---|---|---|
-| R1 准确检索 | ✅ PASS (2/2), 13.6s | ✅ PASS (2/2), 33.9s |
-| R2 测试时学习 | ✅ PASS (1/1), 21.0s | ✅ PASS (1/1), 38.6s |
-| R3 长程理解 | ✅ PASS (1/1), 61.9s | ✅ PASS (1/1), 102.7s |
-| R4 冲突消解 | ✅ PASS (1/1), 19.8s | ✅ PASS (1/1), 160.5s |
-| R5 选择性遗忘 | ✅ PASS（`ocr1_mem_forget` 后检索 NOT_FOUND） | ❌ FAIL（`memory_archive` 后 `memory_read` 仍可读到归档内容） |
+| R1 准确检索 | ✅ PASS (2/2), 27.8s | ✅ PASS (2/2), 14.5s |
+| R2 测试时学习 | ✅ PASS (1/1), 10.9s | ✅ PASS (1/1), 19.3s |
+| R3 长程理解 | ✅ PASS (1/1), 333.9s | ✅ PASS (1/1), 42.6s |
+| R4 冲突消解 | ✅ PASS (1/1), 35.6s | ✅ PASS (1/1), 27.0s |
+| R5 选择性遗忘 | ✅ PASS（`ocr1_mem_forget` 后检索 NOT_FOUND） | ✅ PASS（本次脚本）；⚠️ 此前手动验证曾 FAIL（`memory_archive` 后仍可读到） |
 | R6 跨会话持久化 | ✅ PASS（两次独立 DSH 调用共享 store，第二次命中“用户喜欢喝咖啡”） | ✅ PASS（两次独立 DSH 调用共享 memoryDir，第二次命中） |
 
 结论：
 - dsh-ocr1-memory 在 R1–R6 全部通过；
-- dsh-memory 在 R5 未通过：归档只从 L1 活跃索引隐藏，按名称 `memory_read` 仍可读到归档内容，不满足“再次检索应返回 NOT_FOUND”；
+- dsh-memory 在本次完整脚本运行中 R1–R6 也全部通过；但其 R5 结果不稳定：当 Agent 选择 `memory_archive` 时仍可被 `memory_read` 读到，选择物理删除时才通过；
 - 当前测试中没有出现 dsh-ocr1-memory 不如 dsh-memory 的情况；
-- 延迟方面 dsh-ocr1-memory 更快（可能因为 dsh-memory 的 headless Agent 在多轮工具调用中更慢，也可能受 LLM 波动影响）。
+- 延迟方面：R1/R2/R3 中 dsh-ocr1-memory 的 R3 明显更慢（因为光学检索会对 20 条记忆逐张 OCR 读回），其余任务互有快慢；
 - 注意：R4 两者都返回了 `B`；dsh-ocr1-memory 已新增显式 `ocr1_mem_update`，冲突消解更可靠。
 
 ## R5/R6 扩展状态
@@ -112,7 +112,7 @@ dsh --profile headless \
 - R5（选择性遗忘）和 R6（跨会话持久化）已加入 `scripts/compare-memory.mjs` 设计。
 - 已在隔离 headless 环境中完成 DSH 级完整对比（本次使用后台运行，不 kill 进程）：
   - R5/R6 手动验证时 dsh-ocr1-memory 使用完整 OCR + embedding 配置（`COMPARE_WITH_EMBEDDING=1` 等价）；
-  - R5：dsh-ocr1-memory PASS，dsh-memory FAIL（归档仍可被 `memory_read` 读到）。
+  - R5：dsh-ocr1-memory PASS；dsh-memory 本次脚本 PASS，但此前手动验证曾 FAIL（归档仍可被 `memory_read` 读到），行为不稳定。
   - R6：两者均 PASS。
 - `scripts/compare-memory.mjs` 默认启用 OCR 读回但关闭逐条 embedding（保证 R3 等 20 条存储任务不会过慢）；需要完整 embedding 时设 `COMPARE_WITH_EMBEDDING=1`。
 - core 层测试也覆盖：

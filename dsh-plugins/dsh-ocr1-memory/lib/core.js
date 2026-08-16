@@ -447,11 +447,13 @@ export async function createMemoryStore({
   requireOcr = false,
   useRenderCache = true,
   textOnlyPromptTokens = 5,
+  shared = false,
 }) {
   await fs.mkdir(storeDir, { recursive: true })
   const cacheDir = join(storeDir, '.render-cache')
   const manifestPath = join(storeDir, 'memories.json')
   const renderLocks = new Map()
+  let saveChain = Promise.resolve()
   let entries = []
   try {
     entries = JSON.parse(await fs.readFile(manifestPath, 'utf8')).entries || []
@@ -460,13 +462,49 @@ export async function createMemoryStore({
   }
 
   async function save() {
-    await fs.writeFile(manifestPath, JSON.stringify({ entries }, null, 2), 'utf8')
+    // Serialize saves within this store instance so concurrent add/update/
+    // retrieve calls cannot race on the same manifest rename.
+    const run = saveChain.then(async () => {
+      // Atomic write: write to a unique temp file then rename, so readers never
+      // observe a partially-written memories.json.
+      const tmpPath = `${manifestPath}.${process.pid}.${randomUUID()}.tmp`
+      await fs.writeFile(tmpPath, JSON.stringify({ entries }, null, 2), 'utf8')
+      try {
+        await fs.rename(tmpPath, manifestPath)
+      } catch (err) {
+        // Windows rename cannot always replace an existing destination under
+        // concurrent writers. Retry once by removing the destination first.
+        if (err.code === 'EPERM' || err.code === 'EEXIST' || err.code === 'ENOTEMPTY') {
+          await fs.rm(manifestPath, { force: true }).catch(() => {})
+          await fs.rename(tmpPath, manifestPath)
+        } else {
+          throw err
+        }
+      }
+    })
+    saveChain = run.catch(() => {})
+    await run
+  }
+
+  async function reload() {
+    try {
+      const data = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
+      entries = Array.isArray(data.entries) ? data.entries : []
+    } catch {
+      // Missing or corrupted manifest is treated as an empty store (recovery path).
+      entries = []
+    }
+  }
+
+  async function maybeReload() {
+    if (shared) await reload()
   }
 
   async function renderEntry(entry, { force = false, tier = null } = {}) {
     const idx = tier ?? tierIndexFor(entry, tiers)
     const tierInfo = tiers[idx]
-    if (!force && entry.imagePath && entry.tier === tierInfo.name) return entry.imagePath
+    // If the image file is missing/corrupt, do not trust the metadata; re-render.
+    if (!force && entry.imagePath && entry.tier === tierInfo.name && existsSync(entry.imagePath)) return entry.imagePath
     const outputPath = join(storeDir, `${entry.id}__${tierInfo.name}.${entry.imageExt || 'png'}`)
     // Serialize concurrent renders of the same output path (e.g. parallel active recall).
     const existing = renderLocks.get(outputPath)
@@ -484,8 +522,13 @@ export async function createMemoryStore({
         const key = renderCacheKey(entry.segments, width, true)
         const cachePath = join(cacheDir, `${key}.png`)
         if (existsSync(cachePath)) {
-          await fs.copyFile(cachePath, outputPath)
-          cacheUsed = true
+          try {
+            await fs.copyFile(cachePath, outputPath)
+            cacheUsed = true
+          } catch {
+            // Cache file may be corrupt/locked; fall back to a fresh render.
+            cacheUsed = false
+          }
         }
       }
       if (!cacheUsed) {
@@ -554,6 +597,7 @@ export async function createMemoryStore({
   }
 
   async function add({ text, segments = null, source = '', imageExt = 'png' }) {
+    await maybeReload()
     const segs = Array.isArray(segments)
       ? segments.map((s, i) => ({ id: i + 1, content: String(s) }))
       : splitSegments(text)
@@ -632,7 +676,7 @@ export async function createMemoryStore({
         if (nowMs - recalledMs < tiers[0].maxAgeMs && idx > 0) idx = 0
       }
       const target = tiers[idx]
-      if (entry.tier !== target.name || !entry.imagePath?.includes(`__${target.name}.`)) {
+      if (entry.tier !== target.name || !entry.imagePath?.includes(`__${target.name}.`) || (entry.imagePath && !existsSync(entry.imagePath))) {
         await renderEntry(entry, { force: true, tier: idx })
       } else {
         entry.tierIndex = idx
@@ -642,6 +686,7 @@ export async function createMemoryStore({
   }
 
   async function retrieve(query, opts = {}) {
+    await maybeReload()
     await refreshTiers()
     const topK = opts.topK ?? 5
     // OCR-read each image lazily. If OCR is down, fall back unless requireOcr.
@@ -679,6 +724,7 @@ export async function createMemoryStore({
   }
 
   async function list() {
+    await maybeReload()
     await refreshTiers()
     await save()
     return entries.map((e) => ({
@@ -696,6 +742,7 @@ export async function createMemoryStore({
   }
 
   async function remove(id) {
+    await maybeReload()
     const idx = entries.findIndex((e) => e.id === id)
     if (idx < 0) return false
     const [removed] = entries.splice(idx, 1)
@@ -704,6 +751,7 @@ export async function createMemoryStore({
   }
 
   async function update(id, { text, source = null } = {}) {
+    await maybeReload()
     const entry = entries.find((e) => e.id === id)
     if (!entry) throw new Error(`memory: entry not found: ${id}`)
     const segs = splitSegments(text)
@@ -730,6 +778,7 @@ export async function createMemoryStore({
     remove,
     ensureOcr,
     refreshTiers,
+    reload,
     get entries() { return entries },
     manifestPath,
   }

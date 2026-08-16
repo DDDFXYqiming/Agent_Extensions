@@ -43,6 +43,13 @@
 - 对比基准
   - `scripts/compare-memory.mjs`
   - `docs/BENCHMARK.md`
+- 多 Agent 共享 store 支持
+  - `sharedStore` 配置：操作前 reload `memories.json`
+  - 原子保存：唯一临时文件 + rename，并串行化同一 store 实例内的写入
+- 图像缺失 / 渲染缓存损坏自动恢复
+- 超长输入边界处理与测试
+- 测试规范调研
+  - `docs/TEST_SPEC.md`：MemoryAgentBench / LongMemEval / LoCoMo / AMB 映射到 R1–R6
 
 ### Fixed
 - 检索打分污染：片段级得分不再被整条记忆聚合分抬高
@@ -50,19 +57,22 @@
 - OCR 服务自动拉起：直接 spawn `llama-server.exe`，避免 PowerShell spawn 不稳定
 - CJK 字体渲染：使用微软雅黑/黑体
 - DSH 工具输出 schema 严格性：`ocr1_mem_store` 补 `updated` 字段，`ocr1_mem_list` 只返回 schema 声明字段，避免 headless Agent 报 invalid output
+- 并发保存冲突：唯一临时文件 + 串行化 save，避免 Windows 下 rename EPERM/ENOTEMPTY
 
-### DSH 级对比（R5/R6）
-- 在隔离 headless 环境完成完整对比（dsh-ocr1-memory 使用完整 OCR + embedding 配置）：
-  - R5 选择性遗忘：dsh-ocr1-memory PASS；dsh-memory FAIL（归档后 `memory_read` 仍可读到）
-  - R6 跨会话持久化：两者 PASS
+### DSH 级对比（R1–R6）
+- 用修正后的 `scripts/compare-memory.mjs` 完整重跑 R1–R6：
+  - dsh-ocr1-memory 全部 PASS
+  - dsh-memory 本次也全部 PASS；但 R5 此前手动验证曾 FAIL（`memory_archive` 后 `memory_read` 仍可读到），行为不稳定
+- 手动验证 R5/R6 时 dsh-ocr1-memory 使用完整 OCR + embedding 配置
 
 ### Tests
-- `npm test` 40/40 通过
+- `npm test` 46/46 通过
 - 核心单元测试 8
 - 复杂隔离测试 T1–T24 24
 - OCR HTTP / 渲染缓存 2
 - Embedding 测试 E1–E4 4
 - OCR server 生命周期 2
+- Robustness 测试 M1–M6 6
 
 ### Docs
 - `README.md`
