@@ -61,7 +61,7 @@ hover/拖动时显示纯线性梭形（菱形 `clip-path: polygon(50% 0,0% 50%,5
 
 ```bash
 # package.json dependencies 中：
-# "@dsh-external/dsh-side-panel": "link:C:/Users/39795/Agent_Extensions/dsh-plugins/dsh-side-panel-patched"
+# "@dsh-external/dsh-side-panel": "link:<Agent_Extensions>/dsh-plugins/dsh-side-panel-patched"
 ```
 
 ## 发布形态（2026-08-14 起）

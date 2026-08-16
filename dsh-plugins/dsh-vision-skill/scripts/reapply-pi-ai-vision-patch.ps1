@@ -1,4 +1,4 @@
-﻿# reapply-pi-ai-vision-patch.ps1
+# reapply-pi-ai-vision-patch.ps1
 # [pi-ai vision + zen-ua patch] 幂等重打 dsh-llm-pi-ai 的两个补丁：
 #   A) zen-ua patch：requestHeaders 放行用户显式配置的 User-Agent
 #      （OpenCode Zen 免费层只认 opencode/<ver> UA，否则 429 FreeUsageLimitError）
@@ -10,7 +10,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$piAi = 'C:\Users\39795\.dsh\profiles\node_modules\@deepseek-ai\dsh-llm-pi-ai\lib\index.js'
+$piAi = Join-Path $env:USERPROFILE '.dsh\profiles\node_modules\@deepseek-ai\dsh-llm-pi-ai\lib\index.js'
 
 if (-not (Test-Path -LiteralPath $piAi)) {
     throw "FAIL : file not found: $piAi"
