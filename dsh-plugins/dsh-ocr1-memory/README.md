@@ -145,6 +145,20 @@ llama-server.exe --host 127.0.0.1 --port 18084 --embeddings --pooling mean \
    - 通过 embeddings 端点 marker-only 请求得到 `visualTokensDirect`；
    - 不是 DeepEncoder 内部逐层显式输出。
 
+## 当前运行服务与后续推进条件
+
+- 当前实际需要的服务：
+  - `18080`：DeepSeek-OCR 普通 OCR 读回；
+  - `18084`：DeepSeek-OCR embeddings（1280 维视觉 embedding / embedding 检索）。
+- 探索残留的 `18081/18082/18083` 已不再需要，`18083` 已关闭。
+- 已验证的推进边界：
+  - 无微调让 DeepSeek-OCR 直接输出 SoM 编号：当前 llama.cpp 后端不可靠（输出无关文本），因此论文原版 Locate 需要 LoRA 才能推进。
+  - DeepEncoder 内部压缩管线 / 内部逐层 visual token 数：当前 llama.cpp 公开接口无法获取。
+  - 多模态 embedding 依赖 llama.cpp 扩展；在 AMD 无 NVIDIA/vLLM 环境下无法切换到官方 DeepEncoder 输出。
+- 后续可推进条件：
+  - 若允许 LoRA 微调：可补上“模型输出 SoM 编号”的 Locate 能力。
+  - 若具备 NVIDIA/vLLM 环境：可进一步对齐 DeepEncoder 内部压缩、内部 visual token 输出和官方多模态 embedding。
+
 ## 开发与测试
 
 ```bash

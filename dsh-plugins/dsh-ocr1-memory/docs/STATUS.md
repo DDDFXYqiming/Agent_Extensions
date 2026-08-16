@@ -1,6 +1,6 @@
 # dsh-ocr1-memory 状态总览
 
-> 最后更新：第 18 轮目标推进
+> 最后更新：第 19 轮目标推进
 
 ## 当前状态
 
@@ -67,6 +67,20 @@
 2. LoRA 微调 DeepSeek-OCR 做 SoM 编号检索：按目标要求**不需要做**。
 3. optical memory 已存储**真实 DeepSeek-OCR 1280 维视觉 embedding**（`visualMemory.embedding`，来源 `deepseek-ocr-embeddings`），并已作为主检索信号（`embeddingRetrieval`）；无 embeddings 后端时保留 64 维图像派生 embedding 作为降级。
 4. DSH 级 R1–R6 已用修正后的 `scripts/compare-memory.mjs` 完整重跑；core 层 T18/T19 亦通过。
+
+## 当前运行服务与后续推进条件
+
+- 当前实际需要的服务：
+  - `18080`：DeepSeek-OCR 普通 OCR 读回；
+  - `18084`：DeepSeek-OCR embeddings（1280 维视觉 embedding / embedding 检索）。
+- 探索残留的 `18081/18082/18083` 已不再需要，`18083` 已关闭。
+- 已验证的推进边界：
+  - 无微调让 DeepSeek-OCR 直接输出 SoM 编号：当前 llama.cpp 后端不可靠（输出无关文本），因此论文原版 Locate 需要 LoRA 才能推进。
+  - DeepEncoder 内部压缩管线 / 内部逐层 visual token 数：当前 llama.cpp 公开接口无法获取。
+  - 多模态 embedding 依赖 llama.cpp 扩展；在 AMD 无 NVIDIA/vLLM 环境下无法切换到官方 DeepEncoder 输出。
+- 后续可推进条件：
+  - 若允许 LoRA 微调：可补上“模型输出 SoM 编号”的 Locate 能力。
+  - 若具备 NVIDIA/vLLM 环境：可进一步对齐 DeepEncoder 内部压缩、内部 visual token 输出和官方多模态 embedding。
 
 ## 安全说明
 
