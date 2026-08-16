@@ -172,7 +172,7 @@ content: "Orbit API 需要登录并携带 token。"
 - 设计文档：`docs/BENCHMARK.md`
 - 执行脚本：`scripts/compare-memory.mjs`
 - 隔离环境：两个临时 store + `--patch` 互斥禁用插件
-- 结果：R1–R4 全部通过；R5 dsh-ocr1-memory PASS、dsh-memory FAIL（归档后仍可读到）；R6 两者 PASS。dsh-ocr1-memory 未出现落后于 dsh-memory 的情况。
+- 结果：R1–R4 全部通过；R5 dsh-ocr1-memory PASS、dsh-memory FAIL（归档后仍可读到）；R6 两者 PASS。dsh-ocr1-memory 在对比中使用完整 OCR + embedding 配置，未出现落后于 dsh-memory 的情况。
 
 ## 后续计划
 

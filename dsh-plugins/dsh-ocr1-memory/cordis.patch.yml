@@ -11,3 +11,15 @@
         pythonPath: 'python'
         requireOcr: false
         useMockRenderer: false
+        ocrRepeatPenalty: 1.2
+        ocrNoRepeatNgramSize: 30
+        ocrTextOnlyPromptTokens: 5
+        autoStartOcrServer: false
+        ocrEmbeddingBaseUrl: ''
+        ocrEmbeddingApiKey: ''
+        ocrEmbeddingModel: ''
+        ocrEmbeddingTimeoutMs: 120000
+        ocrEmbeddingEmptyPromptTokens: 1
+        ocrEmbeddingAutoStart: false
+        ocrEmbeddingPort: 18084
+        ocrEmbeddingUbatchSize: 2048

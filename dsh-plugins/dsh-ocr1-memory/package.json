@@ -20,6 +20,25 @@
     "cordis.patch.yml"
   ],
   "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DDDFXYqiming/Agent_Extensions.git",
+    "directory": "dsh-plugins/dsh-ocr1-memory"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "dsh-plugins",
+    "memory",
+    "optical-memory",
+    "ocr1",
+    "deepseek-ocr",
+    "agent-skills"
+  ],
+  "engines": {
+    "node": ">=22.19"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

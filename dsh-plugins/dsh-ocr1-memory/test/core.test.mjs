@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import {
   splitSegments,
   scoreSegment,
+  tokenize,
   retrieveSegments,
   tierIndexFor,
   createMemoryStore,
@@ -31,6 +32,17 @@ test('scoreSegment favours exact token overlap', () => {
   const q = ['orbit', 'api']
   assert.ok(scoreSegment(q, 'The orbit API docs') > scoreSegment(q, 'unrelated text'))
   assert.equal(scoreSegment(q, ''), 0)
+})
+
+test('tokenize splits CJK into character tokens so Chinese queries can match', () => {
+  const storeTokens = tokenize('用户要求所有回复使用中文')
+  assert.ok(storeTokens.includes('中'))
+  assert.ok(storeTokens.includes('文'))
+  const q = tokenize('用户回复语言要求')
+  // 用户 / 回复 / 要求 characters overlap between the rule and the query.
+  const overlap = q.filter((t) => storeTokens.includes(t))
+  assert.ok(overlap.length >= 3, `expected CJK overlap, got ${JSON.stringify(overlap)}`)
+  assert.ok(scoreSegment(q, '用户要求所有回复使用中文') > 0.01)
 })
 
 test('tier ages memory from vivid to fuzzy', () => {

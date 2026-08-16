@@ -111,8 +111,10 @@ dsh --profile headless \
 
 - R5（选择性遗忘）和 R6（跨会话持久化）已加入 `scripts/compare-memory.mjs` 设计。
 - 已在隔离 headless 环境中完成 DSH 级完整对比（本次使用后台运行，不 kill 进程）：
+  - R5/R6 手动验证时 dsh-ocr1-memory 使用完整 OCR + embedding 配置（`COMPARE_WITH_EMBEDDING=1` 等价）；
   - R5：dsh-ocr1-memory PASS，dsh-memory FAIL（归档仍可被 `memory_read` 读到）。
   - R6：两者均 PASS。
+- `scripts/compare-memory.mjs` 默认启用 OCR 读回但关闭逐条 embedding（保证 R3 等 20 条存储任务不会过慢）；需要完整 embedding 时设 `COMPARE_WITH_EMBEDDING=1`。
 - core 层测试也覆盖：
   - T18：选择性遗忘（删除后检索不到）
   - T19：跨会话持久化（重建 store 后仍可检索）
