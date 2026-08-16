@@ -71,9 +71,8 @@
 ## 当前运行服务与后续推进条件
 
 - 当前实际需要的服务：
-  - `18080`：DeepSeek-OCR 普通 OCR 读回；
-  - `18084`：DeepSeek-OCR embeddings（1280 维视觉 embedding / embedding 检索）。
-- 探索残留的 `18081/18082/18083` 已不再需要，`18083` 已关闭。
+  - `18080`：DeepSeek-OCR combined 服务，同时提供 `/v1/chat/completions`（OCR 读回）和 `/v1/embeddings`（1280 维视觉 embedding / embedding 检索）。
+- 不再需要独立的 `18084`；探索残留的 `18081/18082/18083` 已全部关闭。
 - 已验证的推进边界：
   - 无微调让 DeepSeek-OCR 直接输出 SoM 编号：当前 llama.cpp 后端不可靠（输出无关文本），因此论文原版 Locate 需要 LoRA 才能推进。
   - DeepEncoder 内部压缩管线 / 内部逐层 visual token 数：当前 llama.cpp 公开接口无法获取。
