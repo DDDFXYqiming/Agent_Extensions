@@ -18,11 +18,11 @@
 
 | 套件 | 结果 |
 |---|---|
-| `npm test`（已固化） | 46/46 通过 |
+| `npm test`（已固化） | 47/47 通过 |
 | 核心单元测试 | 8/8 通过 |
 | 复杂隔离测试（T1–T24） | 24/24 通过 |
 | OCR HTTP / 渲染缓存测试 | 2/2 通过 |
-| Embedding 测试（E1–E4） | 4/4 通过 |
+| Embedding 测试（E1–E5） | 5/5 通过 |
 | OCR server 生命周期测试 | 2/2 通过 |
 | Robustness 测试（M1–M6） | 6/6 通过 |
 | 真实 OCR / Embedding 隔离测试 | PASS（T6/T15/T16/T21/T23/T24/E4，依赖 llama-server） |
@@ -85,6 +85,7 @@ fuzzy  640  → 100 tokens（对应 OCR1 Small）
 | E2 | 记忆 store 存储真实 multimodal embedding 与 `visualTokensDirect` | PASS |
 | E3 | embedding 后端失败时降级为像素 embedding 并记录 `embeddingError` | PASS |
 | E4 | 真实 DeepSeek-OCR embeddings 后端生成 1280 维视觉 embedding | PASS |
+| E5 | 视觉 embedding 相似度作为主检索信号：embedding 更近的记忆排在前面 | PASS |
 
 真实 E4 实测：`prompt_tokens=785`（marker-only），空文本基线 `prompt_tokens=1`，直接视觉 token=784，embedding 维度=1280。
 

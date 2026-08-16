@@ -147,6 +147,32 @@ test('E3 embedding failure falls back to pixel embedding and records error', asy
   }
 })
 
+test('E5 embedding similarity is the primary retrieval signal', async () => {
+  const t = tmpStore()
+  try {
+    const embedding = async () => ({ embedding: [0, 0, 0], dim: 3, promptTokens: 1, emptyPromptTokens: 1, visualTokens: 0 })
+    embedding.embedText = async (text) => ({ embedding: text.includes('alpha') ? [1, 0, 0] : [0, 1, 0], dim: 3, promptTokens: 1 })
+    const store = await createMemoryStore({
+      storeDir: t.dir,
+      renderer: createMockRenderer(),
+      ocr: createMockOcr({ transcript: '' }),
+      embedding,
+      tiers: DEFAULT_TIERS,
+      embeddingRetrieval: true,
+    })
+    await store.add({ text: '完全无关的中文内容甲', source: 'a' })
+    await store.add({ text: '完全无关的英文内容乙', source: 'b' })
+    store.entries[0].visualMemory.embedding = [1, 0, 0]
+    store.entries[1].visualMemory.embedding = [0, 1, 0]
+
+    const res = await store.retrieve('alpha', { topK: 3 })
+    assert.ok(res.results.length > 0)
+    assert.equal(res.results[0].source, 'a', 'embedding-similar memory should rank first')
+  } finally {
+    t.cleanup()
+  }
+})
+
 test('E4 real DeepSeek-OCR embeddings server stores 1280d visual embedding', { skip: !(await embeddingServerUp()) }, async () => {
   const t = tmpStore()
   try {

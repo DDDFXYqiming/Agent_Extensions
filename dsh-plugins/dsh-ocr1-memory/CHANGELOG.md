@@ -4,11 +4,15 @@
 
 ### Added
 - 真实 DeepSeek-OCR 多模态 embedding 支持
-  - `measureImageEmbedding` / `createEmbeddingHttpClient` / `measureEmptyPromptTokens`
+  - `measureImageEmbedding` / `measureTextEmbedding` / `createEmbeddingHttpClient` / `measureEmptyPromptTokens`
   - 通过 llama.cpp `/v1/embeddings` 的 `prompt_string` + `multimodal_data` 请求真实 1280 维视觉 embedding
   - `visualMemory` 新增 `embeddingDim` / `embeddingSource` / `embeddingPromptTokens` / `visualTokensDirect` / `embeddingError`
   - 新增 `ocr1_mem_embed_test` 工具
   - `lib/ocr-server.js` 支持启动 `--embeddings --pooling mean -ub 2048` 专用服务
+- 视觉 embedding 相似度检索
+  - `measureTextEmbedding` 用于把查询文本嵌入到同一向量空间
+  - `embeddingRetrieval` 配置（默认 true）：检索时先用 query embedding 与记忆 visual embedding 的余弦相似度作为主信号排序，再在命中的记忆内做文本分段定位
+  - `retrieveSegmentsWithEmbeddings` 混合排序函数
 - DSH 插件骨架：`@dsh-external/dsh-ocr1-memory`
 - 核心记忆引擎 `lib/core.js`
   - 文本分段
@@ -69,11 +73,11 @@
 - 手动验证 R5/R6 时 dsh-ocr1-memory 使用完整 OCR + embedding 配置
 
 ### Tests
-- `npm test` 46/46 通过
+- `npm test` 47/47 通过
 - 核心单元测试 8
 - 复杂隔离测试 T1–T24 24
 - OCR HTTP / 渲染缓存 2
-- Embedding 测试 E1–E4 4
+- Embedding 测试 E1–E5 5
 - OCR server 生命周期 2
 - Robustness 测试 M1–M6 6
 

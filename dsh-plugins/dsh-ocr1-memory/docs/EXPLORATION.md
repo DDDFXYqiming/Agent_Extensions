@@ -94,7 +94,7 @@
 ## 8. 关键结论
 
 - 插件核心已能真实调用 DeepSeek-OCR 读图。
-- 隔离临时环境测试通过，`npm test` 已固化 46 项测试。
+- 隔离临时环境测试通过，`npm test` 已固化 47 项测试。
 - 新增 `ocr1_mem_metrics` 工具：按官方分辨率模式估算文本 token / 视觉 token 压缩比，并记录真实 OCR 请求的 `usage.prompt_tokens` 和近似视觉 token 数。
 - 新增 `ocr1_mem_update` 工具：支持显式更新记忆，用于冲突消解/最新值覆盖。
 - 新增 `scripts/start-ocr-server.ps1`、`scripts/ensure-ocr-server.mjs`、`lib/ocr-server.js`。
@@ -103,6 +103,7 @@
 - DSH 级 R1–R6 已在隔离 headless 环境完成完整对比（不 kill 进程，后台运行）：dsh-ocr1-memory 全部 PASS。
 - 已实现 robustness 增强：多 Agent 共享 store（`sharedStore`）、图像缺失/缓存损坏自动恢复、超长输入边界测试。
 - 现已通过 llama.cpp `/v1/embeddings` 的 marker-only 请求存储**真实 1280 维 DeepSeek-OCR 视觉 embedding**，并测量直接视觉 token 数（marker-only `prompt_tokens` − 空文本基线）。
+- 已将视觉 embedding 相似度作为**主检索信号**：`measureTextEmbedding` 嵌入查询，`retrieveSegmentsWithEmbeddings` 先按余弦相似度排序记忆，再在命中记忆内做文本分段定位。
 - 已调研通用 agent 记忆测试规范（MemoryAgentBench / LongMemEval / LoCoMo / AMB），并整理成 `docs/TEST_SPEC.md`；R1–R6 与这些规范一一映射。
 - 距离“完全复现 OCR1 论文效果”仍缺：
   - DeepEncoder 内部逐层输出的纯 visual token 数量（当前使用 llama.cpp token 统计，属于接口级直接测量）

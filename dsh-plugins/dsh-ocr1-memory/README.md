@@ -30,7 +30,7 @@
 | 记忆刷新 | 命中低清记忆 → active recall 恢复高清，并在一段时间内豁免再衰减 |
 | 避免幻觉 | Locate-and-Transcribe 风格：返回原始 verbatim 片段；当前定位由文本打分 + OCR 证据完成，不是模型直接输出 SoM 编号 |
 | OCR 驱动召回 | 原始 token 未命中但 DeepSeek-OCR 从图像读到关键词 → 仍按 OCR 证据召回并取回原文 |
-| 视觉 embedding | 存储真实 DeepSeek-OCR 1280 维视觉向量（`visualMemory.embedding`）；当前作为持久化视觉特征，不参与主检索打分 |
+| 视觉 embedding | 存储真实 DeepSeek-OCR 1280 维视觉向量（`visualMemory.embedding`）；检索时用 query embedding 与记忆 embedding 的相似度作为主信号，再结合文本分段定位 |
 | 渲染缓存 | AgentOCR 式分段哈希缓存，相同分段集合+分辨率直接复用图像 |
 
 ## 配置
@@ -63,6 +63,7 @@
     ocrEmbeddingServerPath: ''         # embeddings 用的 llama-server.exe 路径
     ocrEmbeddingModelDir: ''           # embeddings 用的 GGUF 目录
     sharedStore: false                 # true 时每次操作前重读 memories.json，支持多 Agent 共享同一 store
+    embeddingRetrieval: true           # true 时使用 1280 维视觉 embedding 相似度作为检索主信号（配合 ocrEmbeddingBaseUrl）
 ```
 
 ## 安装
@@ -113,11 +114,11 @@ llama.cpp 的 `/v1/embeddings` 支持多模态输入（`prompt_string` + `multim
 # 方式一：使用 start-ocr-server.ps1 的 -Embeddings 开关
 powershell -File scripts/start-ocr-server.ps1 -Embeddings -Port 18084
 
-# 方式二：手动启动
+# 方式二：手动启动（embedding 服务不需要长生成上下文，用 -c 2048 省显存；单槽 -np 1）
 llama-server.exe --host 127.0.0.1 --port 18084 --embeddings --pooling mean \
   -m <model_dir>\deepseek-ocr-Q4_K_M.gguf \
   --mmproj <model_dir>\mmproj-deepseek-ocr-q8_0.gguf \
-  --alias deepseek-ocr -c 8192 -n 1024 -b 2048 -ub 2048
+  --alias deepseek-ocr -c 2048 -np 1 -n 1024 -b 2048 -ub 2048
 ```
 
 然后把 `ocrEmbeddingBaseUrl` 配成 `http://127.0.0.1:18084/v1`。插件会为每条记忆存储 **1280 维真实视觉 embedding**，并报告“直接视觉 token 数”（仅用 media marker 请求，`prompt_tokens - 空文本基线`）。
@@ -135,9 +136,10 @@ llama-server.exe --host 127.0.0.1 --port 18084 --embeddings --pooling mean \
    - 当前：定位靠文本 token 重叠打分 + OCR 证据；返回原始 verbatim 片段，避免生成幻觉，但不是“模型输出编号”。
    - LoRA 微调让模型输出 SoM 编号这部分按目标要求**不做**。
 
-3. **视觉 embedding 已存储，但不是主检索信号**
+3. **视觉 embedding 已作为主检索信号（工程实现）**
    - 当前 `visualMemory.embedding` 已存储 1280 维真实视觉向量；
-   - 但检索主信号仍是文本打分 + OCR 证据，尚未用 embedding 相似度作为主检索。
+   - 检索时先用 query embedding 与记忆 embedding 的余弦相似度排序记忆，再在命中的记忆内做文本分段定位；
+   - 这比纯文本打分更接近论文“用视觉表示检索”的方向，但仍不是 DeepEncoder 内部压缩。
 
 4. **视觉 token 数是接口级直接测量**
    - 通过 embeddings 端点 marker-only 请求得到 `visualTokensDirect`；
@@ -147,7 +149,7 @@ llama-server.exe --host 127.0.0.1 --port 18084 --embeddings --pooling mean \
 
 ```bash
 npm run build        # node --check
-npm test             # 46 项测试（含复杂隔离测试 + 真实 OCR/embedding + robustness，若后端在线）
+npm test             # 47 项测试（含复杂隔离测试 + 真实 OCR/embedding + robustness，若后端在线）
 npm run test:smoke   # 本地端到端冒烟（真实 Python 渲染 + mock OCR）
 node scripts/compare-memory.mjs  # 对比 dsh-ocr1-memory vs dsh-memory（隔离临时环境）
 dsh --profile headless --dump-config   # 检查插件层已装配
@@ -155,7 +157,7 @@ dsh --profile headless --dump-config   # 检查插件层已装配
 
 ## 测试与对比结果
 
-- `npm test`：**46/46 通过**。
+- `npm test`：**47/47 通过**。
 - Robustness：多 Agent 共享 store、图像缺失/缓存损坏恢复、超长输入边界均通过。
 - 对比基准（`scripts/compare-memory.mjs`，隔离 headless + 官方原装 DSH）：
   - dsh-ocr1-memory：R1–R6 全部 PASS。

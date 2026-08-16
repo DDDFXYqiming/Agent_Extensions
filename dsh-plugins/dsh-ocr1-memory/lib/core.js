@@ -144,6 +144,20 @@ export function scoreSegment(queryTokens, segmentText) {
   return overlap / Math.sqrt(segTokens.length)
 }
 
+export function cosineSimilarity(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || a.length !== b.length) return 0
+  let dot = 0
+  let na = 0
+  let nb = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    na += a[i] * a[i]
+    nb += b[i] * b[i]
+  }
+  if (na === 0 || nb === 0) return 0
+  return dot / (Math.sqrt(na) * Math.sqrt(nb))
+}
+
 export function scoreEntry(queryTokens, entry) {
   const original = (entry.segments || []).map((s) => s.content)
   const ocr = entry.ocrText || ''
@@ -158,6 +172,48 @@ export function scoreEntry(queryTokens, entry) {
     ocrScore,
     score: (originalScore * originalWeight + ocrScore * ocrWeight) / totalWeight,
   }
+}
+
+export function retrieveSegmentsWithEmbeddings(entries, query, { topK = 5, minScore = 0.01, queryEmbedding = null, embeddingWeight = 1 } = {}) {
+  const q = tokenize(query)
+  if (!q.length && !queryEmbedding) return []
+  const ranked = []
+  for (const entry of entries) {
+    const entryEmbedding = entry.visualMemory?.embedding
+    const embSim = queryEmbedding && Array.isArray(entryEmbedding)
+      ? cosineSimilarity(queryEmbedding, entryEmbedding)
+      : 0
+    const candidates = []
+    for (const seg of entry.segments || []) {
+      const segScore = q.length ? scoreSegment(q, seg.content) : 0
+      if (segScore > minScore || embSim > 0.2) {
+        candidates.push({
+          seg,
+          segScore,
+          score: segScore + embSim * embeddingWeight,
+        })
+      }
+    }
+    // Embedding-first fallback: even without a literal text match, a highly
+    // similar memory can still contribute its top segments.
+    if (candidates.length === 0 && embSim > 0.2) {
+      for (const seg of (entry.segments || []).slice(0, 3)) {
+        candidates.push({ seg, segScore: 0, score: embSim * embeddingWeight })
+      }
+    }
+    for (const { seg, score } of candidates) {
+      ranked.push({
+        entryId: entry.id,
+        segmentId: seg.id,
+        content: seg.content,
+        source: entry.source || '',
+        score,
+        tier: entry.tier,
+      })
+    }
+  }
+  ranked.sort((a, b) => b.score - a.score)
+  return ranked.slice(0, topK)
 }
 
 export function retrieveSegments(entries, query, { topK = 5, minScore = 0.01 } = {}) {
@@ -374,6 +430,44 @@ export async function measureImageEmbedding({
   }
 }
 
+/** Measure a text embedding from the same DeepSeek-OCR embeddings endpoint.
+ *  Used to embed retrieval queries so visual memory embeddings can be compared
+ *  in the same vector space.
+ */
+export async function measureTextEmbedding({
+  baseUrl = 'http://127.0.0.1:18080/v1',
+  apiKey = '',
+  model = 'deepseek-ocr',
+  text,
+  timeoutMs = 60_000,
+} = {}) {
+  if (typeof text !== 'string' || !text.trim()) throw new Error('embedding: text is required')
+  const body = { model, input: text }
+  const res = await fetch(`${baseUrl.replace(/\/$/, '')}/embeddings`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`embedding text ${res.status}: ${text.slice(0, 500)}`)
+  }
+  const json = await res.json()
+  const embedding = json?.data?.[0]?.embedding
+  if (!Array.isArray(embedding) || embedding.length === 0) {
+    throw new Error(`embedding text: unexpected response ${JSON.stringify(json).slice(0, 500)}`)
+  }
+  return {
+    embedding,
+    dim: embedding.length,
+    promptTokens: Number(json?.usage?.prompt_tokens ?? 0),
+  }
+}
+
 export function createEmbeddingHttpClient({
   baseUrl = 'http://127.0.0.1:18080/v1',
   apiKey = '',
@@ -382,7 +476,7 @@ export function createEmbeddingHttpClient({
   emptyPromptTokens = null,
 } = {}) {
   let cachedEmptyTokens = emptyPromptTokens
-  return async function measure(imagePath) {
+  const measure = async function measureImage(imagePath) {
     const result = await measureImageEmbedding({
       baseUrl,
       apiKey,
@@ -396,6 +490,10 @@ export function createEmbeddingHttpClient({
     }
     return result
   }
+  measure.embedText = async function embedText(text) {
+    return measureTextEmbedding({ baseUrl, apiKey, model, text, timeoutMs })
+  }
+  return measure
 }
 
 export async function measureTextOnlyPromptTokens({ baseUrl = 'http://127.0.0.1:18080/v1', apiKey = '', model = 'deepseek-ocr', timeoutMs = 30_000 } = {}) {
@@ -448,6 +546,7 @@ export async function createMemoryStore({
   useRenderCache = true,
   textOnlyPromptTokens = 5,
   shared = false,
+  embeddingRetrieval = false,
 }) {
   await fs.mkdir(storeDir, { recursive: true })
   const cacheDir = join(storeDir, '.render-cache')
@@ -699,7 +798,25 @@ export async function createMemoryStore({
       }
     }
     await save()
-    const results = retrieveSegments(entries, query, { topK, minScore: opts.minScore ?? 0.01 })
+    const minScore = opts.minScore ?? 0.01
+    let results
+    const canUseEmbeddingRetrieval = embeddingRetrieval && embedding && typeof embedding.embedText === 'function' &&
+      entries.some((e) => Array.isArray(e.visualMemory?.embedding) && e.visualMemory.embedding.length > 0)
+    if (canUseEmbeddingRetrieval) {
+      try {
+        const qEmb = await embedding.embedText(query)
+        results = retrieveSegmentsWithEmbeddings(entries, query, {
+          topK,
+          minScore,
+          queryEmbedding: qEmb.embedding,
+          embeddingWeight: opts.embeddingWeight ?? 1,
+        })
+      } catch {
+        results = retrieveSegments(entries, query, { topK, minScore })
+      }
+    } else {
+      results = retrieveSegments(entries, query, { topK, minScore })
+    }
     // Active recall: any memory that contributed a result is promoted back to vivid.
     const hitIds = new Set(results.map((r) => r.entryId))
     for (const entry of entries) {

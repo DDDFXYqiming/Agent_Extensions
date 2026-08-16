@@ -59,6 +59,7 @@ export const Config = Schema.object({
   ocrEmbeddingServerPath: Schema.string().default(''),
   ocrEmbeddingModelDir: Schema.string().default(''),
   sharedStore: Schema.boolean().default(false),
+  embeddingRetrieval: Schema.boolean().default(true),
 })
 
 export function apply(ctx, config = {}) {
@@ -87,6 +88,7 @@ export function apply(ctx, config = {}) {
     ocrEmbeddingServerPath: config.ocrEmbeddingServerPath || process.env.OCR_EMBEDDING_SERVER_PATH || '',
     ocrEmbeddingModelDir: config.ocrEmbeddingModelDir || process.env.OCR_EMBEDDING_MODEL_DIR || '',
     sharedStore: Boolean(config.sharedStore),
+    embeddingRetrieval: config.embeddingRetrieval !== undefined ? Boolean(config.embeddingRetrieval) : true,
   }
 
   mkdirSync(cfg.storeDir, { recursive: true })
@@ -122,6 +124,7 @@ export function apply(ctx, config = {}) {
     requireOcr: cfg.requireOcr,
     textOnlyPromptTokens: cfg.ocrTextOnlyPromptTokens,
     shared: cfg.sharedStore,
+    embeddingRetrieval: cfg.embeddingRetrieval,
   })
 
   if (cfg.autoStartOcrServer && cfg.ocrBaseUrl) {
@@ -145,6 +148,7 @@ export function apply(ctx, config = {}) {
         modelDir: cfg.ocrEmbeddingModelDir,
         embeddings: true,
         ubatchSize: cfg.ocrEmbeddingUbatchSize,
+        contextSize: 2048,
       }).catch((err) => {
         console.error(`[ocr1-memory] auto-start embedding server failed: ${err?.message || err}`)
       })
