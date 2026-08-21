@@ -1,3 +1,5 @@
+简体中文 | [English](README.en.md)
+
 # Agent_Extensions
 
 > ## 📦 DSH 插件已拆分为独立仓库
