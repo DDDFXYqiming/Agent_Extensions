@@ -976,6 +976,7 @@ def get_video_info(url: str, platform: str) -> VideoInfo:
             if metadata:
                 print("[info] yt-dlp 元数据失败，已使用 Bilibili API 元数据 fallback", file=sys.stderr)
                 return bilibili_metadata_to_video_info(url, metadata)
+        print("[warn] 元数据不可用（标题/时长缺失），抽帧将退化为固定间隔模式", file=sys.stderr)
         return VideoInfo(video_url=url, video_id=url.split("/")[-1][:50], platform=platform)
     try:
         data = json.loads(result.stdout)
@@ -985,6 +986,7 @@ def get_video_info(url: str, platform: str) -> VideoInfo:
             if metadata:
                 print("[info] yt-dlp 元数据 JSON 解析失败，已使用 Bilibili API 元数据 fallback", file=sys.stderr)
                 return bilibili_metadata_to_video_info(url, metadata)
+        print("[warn] 元数据不可用（标题/时长缺失），抽帧将退化为固定间隔模式", file=sys.stderr)
         return VideoInfo(video_url=url, platform=platform)
 
     return VideoInfo(
@@ -1007,26 +1009,29 @@ def get_video_subtitles(url: str, langs: List[str] = None) -> Optional[Transcrip
         langs = ["zh-Hans", "zh", "en"]
     print(f"[info] 尝试获取字幕 ({','.join(langs)})...", file=sys.stderr)
     tmpdir = tempfile.mkdtemp()
-    cmd = yt_dlp_args() + ["--write-subs", "--write-auto-sub", f"--sub-langs={','.join(langs)}",
-           "--sub-format=srt/vtt/best", f"--output={tmpdir}/%(id)s.%(ext)s", "--skip-download"]
-    result = run_command(cmd + [url], timeout=90, env=command_env())
+    try:
+        cmd = yt_dlp_args() + ["--write-subs", "--write-auto-sub", f"--sub-langs={','.join(langs)}",
+               "--sub-format=srt/vtt/best", f"--output={tmpdir}/%(id)s.%(ext)s", "--skip-download"]
+        result = run_command(cmd + [url], timeout=90, env=command_env())
 
-    subtitle_files = sorted(os.listdir(tmpdir), key=lambda name: (not name.endswith(".srt"), name))
-    for f in subtitle_files:
-        if f.endswith((".srt", ".vtt")):
-            subtitle_path = os.path.join(tmpdir, f)
-            with open(subtitle_path, "r", encoding="utf-8", errors="ignore") as sf:
-                text = sf.read()
-            segments = parse_srt(text) if f.endswith(".srt") else parse_vtt(text)
-            if segments:
-                return TranscriptResult(
-                    language="zh",
-                    full_text="\n".join(s.text for s in segments),
-                    segments=segments
-                )
-    if result.returncode != 0:
-        print(f"[info] 字幕获取失败: {result.stderr[:200]}", file=sys.stderr)
-    return None
+        subtitle_files = sorted(os.listdir(tmpdir), key=lambda name: (not name.endswith(".srt"), name))
+        for f in subtitle_files:
+            if f.endswith((".srt", ".vtt")):
+                subtitle_path = os.path.join(tmpdir, f)
+                with open(subtitle_path, "r", encoding="utf-8", errors="ignore") as sf:
+                    text = sf.read()
+                segments = parse_srt(text) if f.endswith(".srt") else parse_vtt(text)
+                if segments:
+                    return TranscriptResult(
+                        language="zh",
+                        full_text="\n".join(s.text for s in segments),
+                        segments=segments
+                    )
+        if result.returncode != 0:
+            print(f"[info] 字幕获取失败: {result.stderr[:200]}", file=sys.stderr)
+        return None
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 def download_audio(url: str, output_dir: str, platform: str) -> Optional[AudioMeta]:
     """使用 yt-dlp 下载音频，或在本地文件模式下直接返回原文件。"""
@@ -1041,7 +1046,7 @@ def download_audio(url: str, output_dir: str, platform: str) -> Optional[AudioMe
         )
     output_template = os.path.join(output_dir, "%(id)s.%(ext)s")
     cmd = yt_dlp_args() + ["-f", "bestaudio[ext=m4a]/bestaudio/best", "-o", output_template,
-           "--no-playlist", "--postprocessor-args", "ffmpeg:-b:a 64k"]
+           "--no-playlist", "--write-info-json", "--postprocessor-args", "ffmpeg:-b:a 64k"]
     print(f"[download] 正在下载音频...", file=sys.stderr)
     result = run_command(cmd + [url], timeout=600, env=command_env())
     if result.returncode != 0:
