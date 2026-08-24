@@ -113,13 +113,13 @@ python scripts/vision.py --check
 ## ❓ FAQ
 
 **Q：通用技能和 DSH 插件怎么选？**
-A：通用技能跨框架，任何 agent 都能挂载；DSH 插件是 DSH 原生扩展，走官方接缝（工具注册 / Credential / 上下文注入 / 布局插槽），能力更强但只适用于 DSH。两者能力互通——`dsh-vision-skill` 就是把 `General_skills/vision-skill` 包装成 DSH 原生插件。
+A：通用技能跨框架；DSH 插件走官方接缝，能力更强但仅限 DSH。两者互通——`dsh-vision-skill` 就是 `General_skills/vision-skill` 的 DSH 原生封装。
 
 **Q：我的模型不支持图片，能识图吗？**
-A：能。直接贴图会被框架拒绝（`MODEL_DOES_NOT_SUPPORT_IMAGES`），改用两种方式：① 发图片的本地路径文本；② 截图后说"看图"，`vision_clipboard` 自动保存到工作区再识别。这是纯文本模型的能力门禁，不是插件问题。
+A：能。① 发图片的本地路径文本；② 截图后说"看图"，`vision_clipboard` 自动保存到工作区再识别。这是纯文本模型的能力门禁，不是插件问题。
 
 **Q：视觉 API 用哪家？**
-A：任意 OpenAI 兼容的多模态模型接口，通过 `VISION_API_URL` / `VISION_MODEL` / `VISION_API_KEY` 注入，不写死任何厂商。
+A：任意 OpenAI 兼容多模态接口，通过 `VISION_API_URL` / `VISION_MODEL` / `VISION_API_KEY` 注入，不写死厂商。
 
 **Q：子目录之间有关联吗？**
 A：没有。每个子目录是**独立的自包含单元**，可单独使用、单独发布、单独删除。

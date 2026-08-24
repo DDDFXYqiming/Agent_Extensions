@@ -113,10 +113,10 @@ Drop the `hermes_plugins/language-router` directory into your Hermes plugin path
 ## ❓ FAQ
 
 **Q: general skill vs DSH plugin — which should I pick?**
-A: General skills work across frameworks, so any agent can mount them; DSH plugins are DSH-native extensions that use official seams (tool registration / credential / context injection / layout slots) and are more capable, but DSH-only. The two can interoperate — `dsh-vision-skill` is the DSH-plugin wrapper around `General_skills/vision-skill`.
+A: General skills work across frameworks; DSH plugins use official seams and are more capable but DSH-only. They interoperate — `dsh-vision-skill` is the DSH-native wrapper around `General_skills/vision-skill`.
 
 **Q: my model doesn't support images — can it still do image recognition?**
-A: Yes. Direct paste is rejected by the framework (`MODEL_DOES_NOT_SUPPORT_IMAGES`). Use one of two paths instead: ① send a local path string to the image; ② take a screenshot, say "看图" and `vision_clipboard` will save it to the workspace and run recognition. This is a pure-text-model capability gate, not a plugin bug.
+A: Yes. ① send a local path string of the image; ② take a screenshot, say "看图", and `vision_clipboard` saves it to the workspace and recognizes it automatically. This is a pure-text-model capability gate, not a plugin bug.
 
 **Q: which vision API should I use?**
 A: Any OpenAI-compatible multimodal endpoint, injected via `VISION_API_URL` / `VISION_MODEL` / `VISION_API_KEY`. No vendor lock-in.
