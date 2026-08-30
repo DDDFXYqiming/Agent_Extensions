@@ -2,7 +2,9 @@
 
 # Agent_Extensions
 
-> **📦 DSH 插件已拆分为独立仓库**——本仓库 `dsh-plugins/` 下的 DSH 插件已迁移为独立 GitHub 仓库，推荐直接安装独立仓库：
+这个仓库收了三类东西。DSH 原生插件面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，走官方扩展接缝，不打框架补丁。通用 Skill 不绑框架，Hermes 插件给 Hermes 框架用。每一项都自包含，脚本、模板和文档就在各自目录里，克隆下来以后，要哪个目录拿哪个，单独就能用。
+
+> **📦 DSH 插件已拆分为独立仓库**。本仓库 `dsh-plugins/` 下的 DSH 插件已迁移为独立 GitHub 仓库，推荐直接安装独立仓库。
 >
 > | 插件 | 独立仓库 |
 > |---|---|
@@ -12,29 +14,29 @@
 > | dsh-side-panel-patched | https://github.com/DDDFXYqiming/dsh-side-panel-patched |
 > | dsh-ocr1-memory | https://github.com/DDDFXYqiming/dsh-ocr1-memory |
 >
-> 本仓库**不再维护 dsh 插件**，仅保留历史快照与说明；后续更新请以独立仓库为准。
-
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的原生插件（走官方扩展接缝，零框架补丁）+ 跨框架通用 Skill + Hermes 插件。所有内容自包含（技能/插件内自带脚本、模板与文档），克隆即可用。
+> 本仓库**不再维护 dsh 插件**，`dsh-plugins/` 只保留历史快照与说明。后续更新请以独立仓库为准。
 
 ## 内容总览
 
 ### 1️⃣ DSH 原生插件（`dsh-plugins/`，历史快照）
 
+这一组只作留档，日常安装请用上面的独立仓库。各插件能做什么，见下表。
+
 | 插件 | 一句话能力 | 详细 |
 |---|---|---|
 | `dsh-vision-skill` v0.4.4 | 8 工具识图（含渐进式暴露激活工具）+ Credential 化 + 路径围栏 | [README](dsh-plugins/dsh-vision-skill/) |
-| `dsh-layered-memory` v0.4 | 跨会话长期记忆：命名空间隔离 + L1 索引注入 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护 | [README](dsh-plugins/dsh-layered-memory/) |
-| `dsh-annotation-patched` | 选中批注/引用（fork 增强：Codex 式「引用」按钮 + 幽灵引用修复） | [README](dsh-plugins/dsh-annotation-patched/) |
-| `dsh-side-panel-patched` | 右侧工作区面板（fork 增强：绕开 520px 上限 + 多文件 tab + 会话跟踪） | [README](dsh-plugins/dsh-side-panel-patched/) |
-| `dsh-ocr1-memory` v0.1.0 | 光学压缩记忆：文本 → SoM 图像存储 + 年龄衰减 + active recall | [README](dsh-plugins/dsh-ocr1-memory/) |
+| `dsh-layered-memory` v0.4 | 跨会话长期记忆（命名空间隔离 + L1 索引注入 + 自动蒸馏候选 + 溯源/归档/回滚 + 自动维护） | [README](dsh-plugins/dsh-layered-memory/) |
+| `dsh-annotation-patched` | 选中批注/引用（fork 增强，Codex 式「引用」按钮 + 幽灵引用修复） | [README](dsh-plugins/dsh-annotation-patched/) |
+| `dsh-side-panel-patched` | 右侧工作区面板（fork 增强，绕开 520px 上限 + 多文件 tab + 会话跟踪） | [README](dsh-plugins/dsh-side-panel-patched/) |
+| `dsh-ocr1-memory` v0.1.0 | 光学压缩记忆（文本 → SoM 图像存储 + 年龄衰减 + active recall） | [README](dsh-plugins/dsh-ocr1-memory/) |
 
-### 2️⃣ 通用技能（`General_skills/`）—— 跨框架
+### 2️⃣ 通用技能（`General_skills/`，跨框架）
 
-任何智能体框架（Claude Code / Codex / opencode / DSH / Hermes 等）均可把目录作为 Skill 挂载。
+任何智能体框架（Claude Code / Codex / opencode / DSH / Hermes 等）都能把这里的目录作为 Skill 挂载。
 
 | 技能 | 一句话能力 | 依赖 |
 |---|---|---|
-| `vision-skill` | 识图：本地图片 → 视觉模型描述（Qwen 动态分辨率，OpenAI 兼容） | Python 3 + 视觉模型 API Key |
+| `vision-skill` | 识图，本地图片 → 视觉模型描述（Qwen 动态分辨率，OpenAI 兼容） | Python 3 + 视觉模型 API Key |
 | `video-notes-generator` | 视频 URL → 结构化 Markdown 笔记（时间戳 / 抽取帧 / 多模态观察 / AI 总结），支持 B 站 / YouTube / 抖音 / 快手 | Python 3 + 见 `scripts/install_deps.sh` |
 | `ppt-master` | 源文档 → SVG 页面 → PPTX | Python 3（标准库为主） |
 | `markitdown-skill` | PDF / DOCX / PPTX / XLSX / HTML / EPUB → Markdown | Python 3 + `pip install -r requirements.txt` |
@@ -46,7 +48,7 @@
 
 | 插件 | 一句话能力 | 依赖 |
 |---|---|---|
-| [`language-router`](hermes_plugins/language-router/) v5.0 | 自适应语言路由：Planner-first → Worker → 可选 Verifier → Digest（hooks 挂载 `pre_llm_call` 等） | Hermes 框架 |
+| [`language-router`](hermes_plugins/language-router/) v5.0 | 自适应语言路由，流程为 Planner-first → Worker → 可选 Verifier → Digest（hooks 挂载 `pre_llm_call` 等） | Hermes 框架 |
 
 ## 目录结构
 
@@ -66,7 +68,9 @@ Agent_Extensions/
 
 ## 🚀 快速开始
 
-### 方式一：安装 DSH 插件（推荐直接装独立仓库）
+三种装法对应上面三类内容，按你用的框架挑一种就行。
+
+### 方式一 安装 DSH 插件（推荐直接装独立仓库）
 
 ```bash
 # 以 dsh-vision-skill 为例
@@ -76,11 +80,11 @@ dsh plugin --profile web add github:DDDFXYqiming/dsh-vision-skill
 VISION_API_KEY: sk-xxxx
 ```
 
-> ⚠️ bundle 安装后**不要**在 profile 的 `cordis.patch.yml` 里再 `insert` 同名条目，否则会触发 `duplicate loader entry id` 启动崩溃；需要自定义配置时用裸条目按 id 覆盖（见各插件 README）。
+> ⚠️ bundle 安装后再在 profile 的 `cordis.patch.yml` 里 `insert` 同名条目，会触发 `duplicate loader entry id` 启动崩溃。需要自定义配置时，用裸条目按 id 覆盖（见各插件 README）。
 
-### 方式二：挂载通用技能（任何框架）
+### 方式二 挂载通用技能（任何框架）
 
-以 `vision-skill` 为例：
+以 `vision-skill` 为例。
 
 ```bash
 # 1. 复制技能目录到你的 agent 的 skills 目录
@@ -97,9 +101,9 @@ python scripts/vision.py --check
 
 其他技能用法详见各目录内 `SKILL.md`。
 
-### 方式三：安装 Hermes 插件
+### 方式三 安装 Hermes 插件
 
-将 `hermes_plugins/language-router` 目录放入 Hermes 插件目录即可（`plugin.yaml` 声明了全部 hooks 与版本信息）。
+把 `hermes_plugins/language-router` 目录放进 Hermes 的插件目录即可。`plugin.yaml` 里声明了全部 hooks 与版本信息。
 
 ## ⚙️ 环境要求
 
@@ -112,22 +116,29 @@ python scripts/vision.py --check
 
 ## ❓ FAQ
 
-**Q：通用技能和 DSH 插件怎么选？**
-A：通用技能跨框架；DSH 插件走官方接缝，能力更强但仅限 DSH。两者互通——`dsh-vision-skill` 就是 `General_skills/vision-skill` 的 DSH 原生封装。
+**通用技能和 DSH 插件怎么选？**
 
-**Q：我的模型不支持图片，能识图吗？**
-A：能。① 发图片的本地路径文本；② 截图后说"看图"，`vision_clipboard` 自动保存到工作区再识别。这是纯文本模型的能力门禁，不是插件问题。
+通用技能跨框架。DSH 插件走官方接缝，能力更强，但仅限 DSH。两者互通，`dsh-vision-skill` 就是 `General_skills/vision-skill` 的 DSH 原生封装。
 
-**Q：视觉 API 用哪家？**
-A：任意 OpenAI 兼容多模态接口，通过 `VISION_API_URL` / `VISION_MODEL` / `VISION_API_KEY` 注入，不写死厂商。
+**我的模型不支持图片，能识图吗？**
 
-**Q：子目录之间有关联吗？**
-A：没有。每个子目录是**独立的自包含单元**，可单独使用、单独发布、单独删除。
+能。一是发图片的本地路径文本。二是截图后说一句“看图”，`vision_clipboard` 会自动保存到工作区再识别。这个限制来自纯文本模型的能力门禁，与插件无关。
+
+**视觉 API 用哪家？**
+
+任意 OpenAI 兼容多模态接口都行，通过 `VISION_API_URL` / `VISION_MODEL` / `VISION_API_KEY` 注入，不写死厂商。
+
+**子目录之间有关联吗？**
+
+没有。每个子目录都是**独立的自包含单元**，可以单独使用、发布或删除。
 
 ## 🤝 贡献
 
 - 每个子目录是独立的自包含单元，欢迎以 **PR** 提交新技能/插件，或提 **Issue** 反馈问题
-- 贡献要求：自包含（自带脚本/模板/文档）、许可证清晰（建议 MIT）、不写死密钥与本机绝对路径
+- 贡献要求
+  - 内容自包含，自带脚本、模板与文档
+  - 许可证清晰，建议 MIT
+  - 不写死密钥与本机绝对路径
 - 新增技能的入口文档统一为 `SKILL.md`，DSH 插件另附 `cordis.patch.yml` 与 `package.json`
 
 ## 📄 许可
