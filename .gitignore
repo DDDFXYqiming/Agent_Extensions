@@ -4,7 +4,7 @@ __tools/
 __pycache__/
 *.pyc
 
-# Node deps (dsh-plugins)
+# Node deps（仓库内已无 JS 工程，保留以防误提交）
 node_modules/
 
 # Local runtime/temp files

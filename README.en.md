@@ -2,11 +2,11 @@
 
 # Agent_Extensions
 
-This repo collects three kinds of things. DSH-native plugins built for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), going through the official extension seams with zero framework patches. General Skills that bind to no framework, and Hermes plugins for the Hermes framework. Every item is self-contained. Scripts, templates and docs live inside each directory, so once the repo is cloned you can lift any single directory out and use it on its own.
+A collection of framework-agnostic **Agent Skills**. The repo holds two kinds of things: general skills (`General_skills/`) that any agent framework can mount as a directory, and Hermes plugins (`hermes_plugins/`) for the Hermes framework. Every entry is self-contained — scripts, templates and docs live inside its own folder, so you can take one directory and use it alone.
 
-> **📦 DSH plugins have been split into standalone repositories.** The plugins under `dsh-plugins/` in this repo have moved to their own GitHub repos; install from those directly.
+> **DSH plugins are not in this repo.** All DeepSeek Harness (DSH) plugins have been split into standalone repositories — install them from there:
 >
-> | Plugin | Standalone repo |
+> | Plugin | Standalone repository |
 > |---|---|
 > | dsh-vision-skill | https://github.com/DDDFXYqiming/dsh-vision-skill |
 > | dsh-layered-memory | https://github.com/DDDFXYqiming/dsh-layered-memory |
@@ -14,37 +14,25 @@ This repo collects three kinds of things. DSH-native plugins built for [DeepSeek
 > | dsh-side-panel-patched | https://github.com/DDDFXYqiming/dsh-side-panel-patched |
 > | dsh-ocr1-memory | https://github.com/DDDFXYqiming/dsh-ocr1-memory |
 >
-> This repo **no longer maintains dsh plugins**. `dsh-plugins/` remains only as a historical snapshot plus notes. Follow the standalone repos for future updates.
+> This repo no longer carries DSH plugin sources or snapshots.
 
-## Contents
+## What's inside
 
-### 1️⃣ DSH native plugins (`dsh-plugins/`, historical snapshot)
-
-This group is kept for the record only. For daily use, install the standalone repos listed above. What each plugin does is in the table below.
-
-| Plugin | One-liner | Detail |
-|---|---|---|
-| `dsh-vision-skill` v0.4.4 | 8-tool image recognition (with progressive-exposure activation + credential indirection + path sandboxing) | [README](dsh-plugins/dsh-vision-skill/) |
-| `dsh-layered-memory` v0.4 | Cross-session long-term memory (namespace isolation + L1 index injection + auto-distill candidates + provenance / archive / rollback + auto-maintenance) | [README](dsh-plugins/dsh-layered-memory/) |
-| `dsh-annotation-patched` | Select-to-quote plugin (fork enhancement, Codex-style "引用" button + ghost-quote fix) | [README](dsh-plugins/dsh-annotation-patched/) |
-| `dsh-side-panel-patched` | Right-side workspace panel (fork enhancement, bypass 520px cap + multi-file tabs + session tracking) | [README](dsh-plugins/dsh-side-panel-patched/) |
-| `dsh-ocr1-memory` v0.1.0 | Optical-compression memory (text → SoM image storage + age decay + active recall) | [README](dsh-plugins/dsh-ocr1-memory/) |
-
-### 2️⃣ General skills (`General_skills/`, framework-agnostic)
+### 1️⃣ General skills (`General_skills/`, framework-agnostic)
 
 Any agent framework (Claude Code / Codex / opencode / DSH / Hermes, etc.) can mount these directories as Skills.
 
 | Skill | One-liner | Dependency |
 |---|---|---|
-| `vision-skill` | Image recognition, a local image sent to a vision model for description (Qwen dynamic resolution, OpenAI-compatible) | Python 3 + vision model API key |
-| `video-notes-generator` | Video URL → structured Markdown notes (timestamps / extracted frames / multimodal observations / AI summary); supports Bilibili / YouTube / Douyin / Kuaishou | Python 3 + see `scripts/install_deps.sh` |
-| `generic-agent-code-run` | Windows desktop / real-browser automation (Win32 / UIA / OCR / screenshot / CDP) | Python 3 + matching libs |
+| [`vision-skill`](General_skills/vision-skill/) | Image recognition: a local image sent to a vision model for a description (Qwen dynamic resolution, OpenAI-compatible endpoint) | Python 3 + Pillow + vision model API key |
+| [`video-notes-generator`](General_skills/video-notes-generator/) | Video → structured Markdown notes (subtitles/transcription, timestamps, frame extraction, multimodal observation); supports Bilibili / YouTube / Douyin / Kuaishou / local files | Python 3 + `yt-dlp` + `ffmpeg`, see `scripts/install_deps.sh` |
+| [`generic-agent-code-run`](General_skills/generic-agent-code-run/) | Windows desktop and real-browser automation (Win32 / UIA / OCR / screenshot / CDP) with an observe-act-verify loop | Python 3 + matching libs, Windows |
 
-> Every skill ships a `SKILL.md` (loaded at runtime by the agent). Some also ship `scripts/`, `templates/`, `references/`.
+> Every skill ships a `SKILL.md` (instructions the agent loads at runtime), plus `scripts/`, `templates/` and `references/` where needed.
 >
 > This repo only hosts skills we authored. Upstream public projects (e.g. [microsoft/markitdown](https://github.com/microsoft/markitdown), [hugohe3/ppt-master](https://github.com/hugohe3/ppt-master)) are not mirrored here — install them from upstream.
 
-### 3️⃣ Hermes plugins (`hermes_plugins/`)
+### 2️⃣ Hermes plugins (`hermes_plugins/`)
 
 | Plugin | One-liner | Dependency |
 |---|---|---|
@@ -54,7 +42,6 @@ Any agent framework (Claude Code / Codex / opencode / DSH / Hermes, etc.) can mo
 
 ```
 Agent_Extensions/
-├── dsh-plugins/               # DSH native plugins (historical snapshot, see top-of-README migration table)
 ├── General_skills/            # General skills (framework-agnostic, mount-and-go)
 │   ├── vision-skill/
 │   ├── video-notes-generator/
@@ -66,30 +53,16 @@ Agent_Extensions/
 
 ## 🚀 Quick start
 
-Three ways in, matching the three groups above. Pick the one for your framework.
+### Mount a general skill (any framework)
 
-### Method 1. Install a DSH plugin (the standalone repo directly)
-
-```bash
-# Using dsh-vision-skill as an example
-dsh plugin --profile web add github:DDDFXYqiming/dsh-vision-skill
-
-# Configure the credential in $DSH_HOME/.credentials.yaml
-VISION_API_KEY: sk-xxxx
-```
-
-> ⚠️ After a bundle install, adding another `insert: - id: <name>` entry for the same plugin in your profile's `cordis.patch.yml` triggers a `duplicate loader entry id` startup crash. To customize config, override the entry by id (without `insert:`); see each plugin's README.
-
-### Method 2. Mount a general skill (any framework)
-
-Using `vision-skill` as an example.
+Using `vision-skill` as the example.
 
 ```bash
-# 1. Copy the skill dir into your agent's skills directory
-#    (Claude Code: ~/.claude/skills/ ; Codex: ~/.codex/skills/ ; others: see their docs)
+# 1. Copy the skill directory into your agent's skills directory
+#    (Claude Code: ~/.claude/skills/ ; Codex: ~/.codex/skills/ ; see your framework's docs)
 cp -r General_skills/vision-skill <your skills dir>/
 
-# 2. Configure the vision model (OpenAI-compatible)
+# 2. Configure the vision model (OpenAI-compatible endpoint)
 cd General_skills/vision-skill
 cp templates/.env.example .env   # fill in VISION_API_URL / VISION_MODEL / VISION_API_KEY
 
@@ -97,48 +70,53 @@ cp templates/.env.example .env   # fill in VISION_API_URL / VISION_MODEL / VISIO
 python scripts/vision.py --check
 ```
 
-Other skills, see each directory's `SKILL.md`.
+For the other skills, see the `SKILL.md` in each directory. `video-notes-generator` also needs `yt-dlp` and `ffmpeg` on PATH.
 
-### Method 3. Install a Hermes plugin
+### Install a Hermes plugin
 
-Drop the `hermes_plugins/language-router` directory into your Hermes plugin path. The `plugin.yaml` inside declares every hook and the version info.
+Drop `hermes_plugins/language-router` into your Hermes plugin path. The `plugin.yaml` inside declares every hook and the version info.
+
+### Using DSH?
+
+DSH plugins live in their own repositories — see the install notes in each repo from the table above. The general skills in this repo can still be mounted as Skills inside DSH; for `vision-skill`, the DSH integration steps (including the framework patch) are in [General_skills/vision-skill/references/dsh-integration.md](General_skills/vision-skill/references/dsh-integration.md).
 
 ## ⚙️ Requirements
 
 | Use case | Requirement |
 |---|---|
-| DSH plugins | Node.js + DSH (`@deepseek-ai/dsh-tools`, `@deepseek-ai/dsh-credentials`) |
-| dsh-vision-skill / vision-skill | additionally Python 3 + Pillow, and an **OpenAI-compatible multimodal model** API key (Qwen-VL / MiniMax-M3 / Gemini / GPT-4o; default MiniMax-M3) |
-| General skills (vision / video / automation) | Python 3.x + each skill's listed pip dependencies |
+| vision-skill | Python 3 + Pillow, and an **OpenAI-compatible multimodal model** API key (Qwen-VL / MiniMax-M3 / Gemini / GPT-4o; default MiniMax-M3) |
+| video-notes-generator | Python 3 + `yt-dlp` + `ffmpeg`; subtitle-less videos transcribe locally with faster-whisper (discrete GPU auto-detected, falls back to CPU) |
+| generic-agent-code-run | Windows + Python 3, plus pywin32 / Pillow / uiautomation / pyperclip as needed |
 | Hermes plugins | Hermes framework |
 
 ## ❓ FAQ
 
 **General skill or DSH plugin, which should I pick?**
 
-General skills work across frameworks. DSH plugins use the official seams and are more capable, but they only run under DSH. The two interoperate. `dsh-vision-skill` is the DSH-native wrapper around `General_skills/vision-skill`.
+General skills are cross-framework: copy the directory and mount it. DSH plugins use the official extension seams and are more capable (credential handling, progressive tool exposure, and so on) but only run under DSH, and each lives in its own repository. The two share a lineage: `dsh-vision-skill` is the DSH-native wrapper around this repo's `General_skills/vision-skill`.
 
 **My model doesn't support images. Can it still do image recognition?**
 
-Yes. One way is sending the image's local path as plain text. Another is taking a screenshot and saying “看图”, then `vision_clipboard` saves it to the workspace and recognizes it automatically. The limit comes from the capability gate of pure-text models, not from the plugin.
+Yes. Hand the image's local path to the skill: `vision-skill` calls the multimodal endpoint you configured, returns a text description, and you answer from that. Read the whole image first, then re-read small text and error regions with `--crop`.
 
-**Which vision API should I use?**
+**Which vision API?**
 
-Any OpenAI-compatible multimodal endpoint works. Inject it through `VISION_API_URL` / `VISION_MODEL` / `VISION_API_KEY`. No vendor lock-in.
+Any OpenAI-compatible multimodal endpoint, injected via `VISION_API_URL` / `VISION_MODEL` / `VISION_API_KEY`. No vendor is hardcoded.
 
-**Are sub-directories interdependent?**
+**Are the subdirectories related?**
 
-No. Each sub-directory is a **self-contained unit**. Install, publish, or delete any one independently.
+No. Each subdirectory is an **independent, self-contained unit** that can be used, published, or deleted on its own.
 
 ## 🤝 Contributing
 
-- Each sub-directory is an independent self-contained unit. **PRs** for new skills / plugins and **Issues** for bug reports are both welcome
+- Every subdirectory is a self-contained unit. New skills are welcome as **PRs**; please file an **Issue** for problems.
 - Contribution requirements
-  - Self-contained (ship own scripts / templates / docs)
-  - Clear license (MIT recommended)
-  - No hard-coded keys or absolute local paths
-- New skills go in as `SKILL.md`. New DSH plugins additionally ship `cordis.patch.yml` + `package.json`
+  - Self-contained content, shipping its own scripts, templates and docs
+  - A clear license, MIT recommended
+  - No hardcoded secrets or machine-specific absolute paths
+  - The entry document is `SKILL.md`, following the [Agent Skills specification](https://agentskills.io/specification): `name` matches the directory, `description` states what it does and when to use it, and the body holds only instructions the agent acts on — human-facing docs and version history belong in `references/` and `CHANGELOG.md`
+- DSH plugins should get their own repository; they do not go into this one
 
 ## 📄 License
 
-Everything in this repo is released under the **MIT License**. Community-sourced material keeps its original author attribution (see each sub-directory's `SKILL.md` / `plugin.yaml` header).
+Everything in this repo is distributed under the **MIT License**. Community-derived content keeps its original attribution (see the header of each `SKILL.md`).
