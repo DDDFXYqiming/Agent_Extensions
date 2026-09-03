@@ -38,11 +38,11 @@
 |---|---|---|
 | `vision-skill` | 识图，本地图片 → 视觉模型描述（Qwen 动态分辨率，OpenAI 兼容） | Python 3 + 视觉模型 API Key |
 | `video-notes-generator` | 视频 URL → 结构化 Markdown 笔记（时间戳 / 抽取帧 / 多模态观察 / AI 总结），支持 B 站 / YouTube / 抖音 / 快手 | Python 3 + 见 `scripts/install_deps.sh` |
-| `ppt-master` | 源文档 → SVG 页面 → PPTX | Python 3（标准库为主） |
-| `markitdown-skill` | PDF / DOCX / PPTX / XLSX / HTML / EPUB → Markdown | Python 3 + `pip install -r requirements.txt` |
 | `generic-agent-code-run` | Windows 桌面应用 / 真实浏览器自动化（Win32 / UIA / OCR / 截图 / CDP） | Python 3 + 对应库 |
 
 > 所有技能均内置 `SKILL.md`（agent 运行时加载的指令），部分附 `scripts/`、`templates/`、`references/`。
+>
+> 本仓库只收录自己写的技能。上游公开项目（如 [microsoft/markitdown](https://github.com/microsoft/markitdown)、[hugohe3/ppt-master](https://github.com/hugohe3/ppt-master)）不在此镜像，请直接装上游。
 
 ### 3️⃣ Hermes 插件（`hermes_plugins/`）
 
@@ -58,8 +58,6 @@ Agent_Extensions/
 ├── General_skills/            # 通用技能（跨框架，挂载即用）
 │   ├── vision-skill/
 │   ├── video-notes-generator/
-│   ├── ppt-master/
-│   ├── markitdown-skill/
 │   └── generic-agent-code-run/
 ├── hermes_plugins/            # Hermes 框架插件
 │   └── language-router/
@@ -111,7 +109,7 @@ python scripts/vision.py --check
 |---|---|
 | DSH 插件 | Node.js + DSH（`@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-credentials`） |
 | dsh-vision-skill / vision-skill | 额外需要 Python 3 + Pillow，以及**任意 OpenAI 兼容多模态模型** API Key（Qwen-VL / MiniMax-M3 / Gemini / GPT-4o，默认 MiniMax-M3） |
-| 通用技能（vision / video / ppt / markitdown / automation） | Python 3.x + 各技能列出的 pip 依赖 |
+| 通用技能（vision / video / automation） | Python 3.x + 各技能列出的 pip 依赖 |
 | Hermes 插件 | Hermes 框架 |
 
 ## ❓ FAQ

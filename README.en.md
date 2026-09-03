@@ -38,11 +38,11 @@ Any agent framework (Claude Code / Codex / opencode / DSH / Hermes, etc.) can mo
 |---|---|---|
 | `vision-skill` | Image recognition, a local image sent to a vision model for description (Qwen dynamic resolution, OpenAI-compatible) | Python 3 + vision model API key |
 | `video-notes-generator` | Video URL → structured Markdown notes (timestamps / extracted frames / multimodal observations / AI summary); supports Bilibili / YouTube / Douyin / Kuaishou | Python 3 + see `scripts/install_deps.sh` |
-| `ppt-master` | Source document → SVG pages → PPTX | Python 3 (stdlib-first) |
-| `markitdown-skill` | PDF / DOCX / PPTX / XLSX / HTML / EPUB → Markdown | Python 3 + `pip install -r requirements.txt` |
 | `generic-agent-code-run` | Windows desktop / real-browser automation (Win32 / UIA / OCR / screenshot / CDP) | Python 3 + matching libs |
 
 > Every skill ships a `SKILL.md` (loaded at runtime by the agent). Some also ship `scripts/`, `templates/`, `references/`.
+>
+> This repo only hosts skills we authored. Upstream public projects (e.g. [microsoft/markitdown](https://github.com/microsoft/markitdown), [hugohe3/ppt-master](https://github.com/hugohe3/ppt-master)) are not mirrored here — install them from upstream.
 
 ### 3️⃣ Hermes plugins (`hermes_plugins/`)
 
@@ -58,8 +58,6 @@ Agent_Extensions/
 ├── General_skills/            # General skills (framework-agnostic, mount-and-go)
 │   ├── vision-skill/
 │   ├── video-notes-generator/
-│   ├── ppt-master/
-│   ├── markitdown-skill/
 │   └── generic-agent-code-run/
 ├── hermes_plugins/            # Hermes framework plugins
 │   └── language-router/
@@ -111,7 +109,7 @@ Drop the `hermes_plugins/language-router` directory into your Hermes plugin path
 |---|---|
 | DSH plugins | Node.js + DSH (`@deepseek-ai/dsh-tools`, `@deepseek-ai/dsh-credentials`) |
 | dsh-vision-skill / vision-skill | additionally Python 3 + Pillow, and an **OpenAI-compatible multimodal model** API key (Qwen-VL / MiniMax-M3 / Gemini / GPT-4o; default MiniMax-M3) |
-| General skills (vision / video / ppt / markitdown / automation) | Python 3.x + each skill's listed pip dependencies |
+| General skills (vision / video / automation) | Python 3.x + each skill's listed pip dependencies |
 | Hermes plugins | Hermes framework |
 
 ## ❓ FAQ
