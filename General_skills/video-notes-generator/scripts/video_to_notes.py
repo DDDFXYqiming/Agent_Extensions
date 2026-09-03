@@ -758,6 +758,7 @@ def transcribe_via_whisper_cpp(audio_path: str, model: str = "base") -> Optional
 
 
 def transcribe_via_faster_whisper(audio_path: str, model: str = "base") -> Optional[List[TranscriptSegment]]:
+    enable_cuda_runtime()  # 必须在 import 之前：Windows 下 cublas 只认 PATH
     try:
         os.environ.setdefault("HF_HOME", runtime_path("hf-cache"))
         os.environ.setdefault("HUGGINGFACE_HUB_CACHE", runtime_path("hf-cache", "hub"))
@@ -767,24 +768,95 @@ def transcribe_via_faster_whisper(audio_path: str, model: str = "base") -> Optio
         print(f"[transcribe] faster-whisper 不可用: {e}", file=sys.stderr)
         return None
 
+    gpus = detect_gpus()
+    print(f"[transcribe] 显卡: {gpus or '未探测到'}（faster-whisper 仅支持 NVIDIA/cuda，其余见 SKILL.md 算力小节）", file=sys.stderr)
+    os.makedirs(runtime_path("models"), exist_ok=True)
+    resolved_model = resolve_faster_whisper_model(model)
+    last_err = None
+    for device, compute_type in whisper_device_candidates():
+        try:
+            print(f"[transcribe] faster-whisper 转写中 (model={model} -> {resolved_model}, device={device}, compute_type={compute_type})...", file=sys.stderr)
+            whisper_model = WhisperModel(
+                resolved_model,
+                device=device,
+                compute_type=compute_type,
+                download_root=runtime_path("models"),
+            )
+            raw_segments, _ = whisper_model.transcribe(audio_path, language="zh", vad_filter=True)
+            segments = [TranscriptSegment(start=s.start, end=s.end, text=s.text.strip()) for s in raw_segments if s.text.strip()]
+            if segments:
+                print(f"[transcribe] faster-whisper 转写完成: {len(segments)} 段 (device={device})", file=sys.stderr)
+            return segments if segments else None
+        except Exception as e:
+            # 显存不足 / CUDA 不可用时退回 CPU，不让整条转写链路断掉
+            last_err = e
+            print(f"[transcribe] device={device} 失败，尝试下一个: {e}", file=sys.stderr)
+    print(f"[transcribe] faster-whisper 转写失败: {last_err}", file=sys.stderr)
+    return None
+
+
+# 本机可能已存在的 CUDA 12 运行库目录（Ollama / CUDA Toolkit / pip nvidia wheel / 用户指定）。
+# 只借用、不下载、不安装：找不到就照常走 CPU，装什么由 SKILL.md 指引智能体决定。
+CUDA_RUNTIME_HINTS = [
+    os.getenv("VIDEO_NOTES_CUDA_BIN", ""),
+    os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\lib\ollama\cuda_v12"),
+    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12*\bin",
+    os.path.join(os.path.dirname(os.path.dirname(os.__file__)), "site-packages", "nvidia", "cublas", "bin"),
+]
+
+
+def enable_cuda_runtime() -> bool:
+    """Windows 上 ctranslate2 推理时要 LoadLibrary cublas64_12.dll，只认 PATH（os.add_dll_directory 无效）。
+    从本机已有目录里借一份塞进 PATH。必须在 import faster_whisper 之前调用。"""
+    if sys.platform != "win32":
+        return False  # Linux/macOS 由 ldconfig / SIP 自行解析
+    import glob
+    for pat in CUDA_RUNTIME_HINTS:
+        if not pat or not os.path.isdir(pat):
+            continue
+        if glob.glob(os.path.join(pat, "cublas64_12.dll")) or glob.glob(os.path.join(pat, "cublas64*.dll")):
+            if pat not in os.environ.get("PATH", "").split(os.pathsep):
+                os.environ["PATH"] = pat + os.pathsep + os.environ["PATH"]
+            print(f"[transcribe] 借用本机 CUDA 运行库: {pat}", file=sys.stderr)
+            return True
+    return False
+
+
+def detect_gpus() -> List[str]:
+    """列出本机所有显卡（含核显），仅用于日志与智能体决策，不参与选路。失败返回 []。"""
     try:
-        os.makedirs(runtime_path("models"), exist_ok=True)
-        resolved_model = resolve_faster_whisper_model(model)
-        print(f"[transcribe] faster-whisper 转写中 (model={model} -> {resolved_model})...", file=sys.stderr)
-        whisper_model = WhisperModel(
-            resolved_model,
-            device=os.getenv("WHISPER_DEVICE", "cpu"),
-            compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "int8"),
-            download_root=runtime_path("models"),
-        )
-        raw_segments, _ = whisper_model.transcribe(audio_path, language="zh", vad_filter=True)
-        segments = [TranscriptSegment(start=s.start, end=s.end, text=s.text.strip()) for s in raw_segments if s.text.strip()]
-        if segments:
-            print(f"[transcribe] faster-whisper 转写完成: {len(segments)} 段", file=sys.stderr)
-        return segments if segments else None
-    except Exception as e:
-        print(f"[transcribe] faster-whisper 转写失败: {e}", file=sys.stderr)
-        return None
+        if sys.platform == "win32":
+            out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                                  "(Get-CimInstance Win32_VideoController).Name"],
+                                 capture_output=True, text=True, timeout=10).stdout
+            return [l.strip() for l in out.splitlines() if l.strip()][:4]
+        if sys.platform == "darwin":
+            out = subprocess.run(["system_profiler", "SPDisplaysDataType"],
+                                 capture_output=True, text=True, timeout=10).stdout
+            return re.findall(r"Chipset Model:\s*(.+)", out)[:4]
+        out = subprocess.run(["lspci"], capture_output=True, text=True, timeout=10).stdout
+        # lspci 形如 "0000:00:02.0 VGA compatible controller: Intel UHD"，地址里的冒号后无空格，按 ": " 切一次即可
+        return [l.split(": ", 1)[-1].strip() for l in out.splitlines()
+                if re.search(r"VGA|3D|Display controller", l)][:4]
+    except Exception:
+        return []
+
+
+def whisper_device_candidates() -> List[tuple]:
+    """探测可用算力（厂商无关）：能真跑 cuda 才试 cuda，否则 cpu。显式设 WHISPER_DEVICE 时完全听用户的。
+    注意 ctranslate2 只支持 cpu/cuda —— AMD/Intel/Apple 显卡走不了这条路，见 SKILL.md 的 whisper.cpp 路线。"""
+    dev, ct = os.getenv("WHISPER_DEVICE"), os.getenv("WHISPER_COMPUTE_TYPE")
+    if dev:
+        return [(dev, ct or "default")]
+    out = []
+    try:
+        import ctranslate2  # faster-whisper 自带依赖，无需新增
+        if ctranslate2.get_cuda_device_count() > 0:
+            out.append(("cuda", ct or "float16"))
+    except Exception:
+        pass
+    out.append(("cpu", ct or "int8"))
+    return out
 
 # ============================================================
 # SRT 字幕解析器 (纯标准库)

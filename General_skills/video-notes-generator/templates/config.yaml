@@ -21,6 +21,10 @@ transcription:
   transcriber_type_env: TRANSCRIBER_TYPE
   whisper_cpp_env: WHISPER_CPP
   whisper_model_env: WHISPER_MODEL
+  # Auto-detected when unset: cuda/float16 if a discrete GPU is visible, else cpu/int8.
+  # cuda load failures fall back to cpu automatically instead of aborting transcription.
+  whisper_device_env: WHISPER_DEVICE
+  whisper_compute_type_env: WHISPER_COMPUTE_TYPE
 
 output:
   directory_flag: -o/--output
