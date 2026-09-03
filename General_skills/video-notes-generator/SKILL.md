@@ -1,11 +1,12 @@
 ---
 name: video-notes-generator
 description: "Use when user wants to summarize, analyze, or generate notes from a video URL. Converts video content into structured Markdown notes with timestamps, extracted visual frames, native multimodal image observations, and AI summaries. Supports Bilibili, YouTube, Douyin, Kuaishou, and local files."
-version: 1.2.1
-author: Diana (extracted from BiliNote v2.4.0 by JefferyHcool)
 license: MIT
-platforms: [linux, macos, windows]
+compatibility: 需要 yt-dlp 与 ffmpeg 二进制（脚本自动探测，从不自动安装）。转写默认 faster-whisper，可选 whisper.cpp。
 metadata:
+  version: "1.2.2"
+  author: Diana (extracted from BiliNote v2.4.0 by JefferyHcool)
+  platforms: linux, macos, windows
   hermes:
     tags: [video, notes, bilibili, youtube, transcription, summarization]
     related_skills: [youtube-content, gif-search]
@@ -60,29 +61,22 @@ python3 <skill>/scripts/video_to_notes.py "<url>" --no-frames
 | `YTDLP` / `FFMPEG` | 自动探测 | 二进制路径 |
 | `TRANSCRIBER_TYPE` | `faster-whisper` | 转写引擎；`whisper.cpp` 可选（有 git/编译器时自动编译） |
 | `WHISPER_MODEL` | `base` | 转写模型。嘈杂音频建议 `large-v3-turbo`（首次需下载模型）；内置别名 tiny/base/small/medium/large-v1/v2/v3/v3-turbo |
-| `WHISPER_DEVICE` / `WHISPER_COMPUTE_TYPE` | 自动探测（有独显 → `cuda`/`float16`，否则 `cpu`/`int8`） | 显式设值则完全听你的；cuda 失败自动退 cpu，不中断转写 |
-| `VIDEO_NOTES_CUDA_BIN` | 自动搜索 | 含 `cublas64_12.dll` 的目录；未设时脚本从 Ollama / CUDA Toolkit / nvidia wheel 目录里借（只借不装） |
+| `WHISPER_DEVICE` / `WHISPER_COMPUTE_TYPE` | 留空 = 自动探测 | 显式设值最优先；取值与降级行为见「转写算力」小节 |
+| `VIDEO_NOTES_CUDA_BIN` | 自动搜索 | 含 `cublas64_12.dll` 的目录，供借用 CUDA 运行库时指定 |
 | `VIDEO_NOTES_PROXY` | 标准 proxy env | yt-dlp/网络代理；也可用 `<runtime>/config/proxy.json` `{"enabled":true,"url":"..."}` |
 | `VIDEO_NOTES_MAX_AGENT_FRAMES` | `3` | 默认最大抽帧数 |
 | `VIDEO_NOTES_FRAME_MAX_WIDTH` | `640` | 帧宽上限 |
 
 CLI 参数：位置参数 `url` 必填；`-o/--output`（默认 `./notes`）；`--no-subtitle`、`--transcribe`、`--model`、`--frame-interval`、`--max-frames`、`--no-frames`、`--print-full-json`（勿在 Agent 场景使用）。已废弃：`--url/--file/--style/--format/--quality`。
 
-## 算力与显卡（脚本只探测，从不安装）
+## 转写算力
 
-选路全自动，智能体**不需要先查硬件再决定**：`enable_cuda_runtime()` 先借本机已有的 CUDA 运行库 → `ctranslate2.get_cuda_device_count()` 探测 → 能跑就 `cuda`/`float16`，否则 `cpu`/`int8`；cuda 中途失败自动降级重试，不会中断转写。日志会打印本机显卡清单。**装什么依赖是智能体的事，脚本从不 pip。**
+脚本自己探测，**不要先查硬件再决定**：可用则 `cuda`/`float16`，否则 `cpu`/`int8`；cuda 中途失败自动降级重试，转写不会中断。
 
-| 显卡 | faster-whisper | 启用方式（由智能体执行） |
-|---|---|---|
-| NVIDIA | ✅ cuda | 脚本自动借 cublas；本机确实没有时 `pip install nvidia-cublas-cu12`（cuDNN 已在 ctranslate2 wheel 内，**只缺 cuBLAS**） |
-| AMD 独显 / 核显 | ❌ 上游无 ROCm 构建 | 改 `TRANSCRIBER_TYPE=whisper.cpp`，自行编译开 `GGML_VULKAN=ON` |
-| Intel Arc / 核显 | ❌ | 同上：whisper.cpp + `GGML_VULKAN=ON`（或 `GGML_SYCL=ON`） |
-| Apple Silicon | ❌（ctranslate2 只有 cpu/cuda） | whisper.cpp + Metal，或 CPU |
-| 无独显 | — | 自动落 CPU int8，`WHISPER_MODEL=base` 即可 |
-
-实测 RTX 2070 Max-Q + small 模型 + 60s 音频：cuda/float16 = **14.0x 实时**，cpu/int8 = 2.7x 实时；54 分钟视频从约 22 分钟降到约 4 分钟。
-
-强制覆盖：`WHISPER_DEVICE=cuda|cpu|auto`（`auto` 交给 ctranslate2 自己判）、`WHISPER_COMPUTE_TYPE=float16|int8|...`。独显被训练等任务占满、要把算力腾出来时设 `WHISPER_DEVICE=cpu`。
+- 日志 `cublas64_12.dll is not found` = 本机没有可借的 CUDA 运行库，已自动降级，属预期，不要干预或重跑
+- 要把算力腾给别的任务：设 `WHISPER_DEVICE=cpu`
+- AMD / Intel / Apple 显卡 faster-whisper 用不上 → 换 whisper.cpp 后端，见 [references/platform-support.md](references/platform-support.md) 的 Transcription compute 小节
+- 装依赖由你执行，脚本从不 pip
 
 ## 终稿 Markdown 强制规范
 
@@ -121,7 +115,7 @@ UP 主全集任务先读 `references/bilibili-uploader-discovery.md`；精确投
 4. 长视频（>2h）自动分块合并，耗时显著
 5. 产物为中文导向，其他语言由 Agent 手动转换
 6. 本脚本不启动浏览器；Agent 浏览器工具残留的 `agent-browser-chrome-*` 僵尸进程由脚本启动时自动清理，也可手动 `pkill -f agent-browser-chrome`
-7. 算力自动选路，见上文「算力与显卡」小节。日志出现 `cublas64_12.dll is not found` = 本机没有可借的 CUDA 运行库，脚本会静默降级到 CPU（属预期），要 GPU 就按小节里那行装 `nvidia-cublas-cu12`。AMD/Intel/Apple 显卡 faster-whisper 用不上，走 whisper.cpp 后端。
+7. 转写算力自动选路，见「转写算力」小节；缺 CUDA 运行库会静默降级到 CPU，属预期，不要因此重跑。
 
 ## 验收清单
 
@@ -130,9 +124,3 @@ UP 主全集任务先读 `references/bilibili-uploader-discovery.md`；精确投
 - [ ] 正常跑必有帧：frames/ 目录有图、manifest 指向存在的文件、final_notes 有嵌入与观察
 - [ ] 无 pending visual review 遗留（除非用户接受纯文本并明确记录）
 - [ ] 终端无错误输出
-
-## Changelog
-
-- 1.2.2：算力改为厂商无关的自动选路——先借本机已有 CUDA 运行库（Ollama / CUDA Toolkit / nvidia wheel，只借不装）、再探测 cuda、失败自动退 CPU 且不中断转写；日志打印显卡清单；新增 `VIDEO_NOTES_CUDA_BIN`；SKILL.md 补「算力与显卡」小节，把装依赖的决策交给智能体。脚本不再默认写死 CPU。
-- 1.2.1：修复 download_audio 缺 `--write-info-json` 导致标题/时长永远退化为 BV 号；字幕临时目录用后即清；get_video_info 失败改为显式 `[warn]`（时长缺失→抽帧退化固定间隔）；SKILL.md 移除自动灌水导读瘦身。
-- 1.2.0：帧抽取默认化（20%/50%/80% 代表点）、native multimodal 工作流、B站 412 API fallback、代理三级配置。
