@@ -1,6 +1,6 @@
 # Style Guide
 
-Nine note styles are available. Each appends a style-specific instruction to the LLM prompt.
+Optional writing presets for the Agent when a user requests a particular style. These are not CLI flags and are not automatically appended by the Python script. SKILL.md's evidence workflow applies to every style.
 
 ## Style Table
 

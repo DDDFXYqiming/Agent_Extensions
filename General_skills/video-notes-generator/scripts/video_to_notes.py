@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Video Notes Generator — 核心脚本 (零pip依赖版本)
+Video Notes Generator — 素材提取与自适应视觉采样
 依赖: yt-dlp (二进制), ffmpeg (系统包)
-无需安装任何 Python 扩展包。whisper.cpp 可选，有则自动转写。
+核心使用标准库；faster-whisper 后端需安装对应包，Pillow 可选生成预览拼图。
 
 用法:
     python3 video_to_notes.py <video_url> [--output ./notes]
     python3 video_to_notes.py <video_url> --transcribe --model base
-    # Frames, visual manifest, Markdown image embeds, and opening Mermaid mind map are enabled by default.
+    # Adaptive visual candidates and complete timestamped transcript chunks are enabled by default.
 """
 
 import argparse
@@ -28,59 +28,7 @@ from pathlib import Path
 from typing import List, Optional
 
 
-def _cleanup_agent_browser_chrome():
-    """Kill leftover agent-browser-chrome temporary profile processes.
-
-    These are NOT created by this script; they come from the Agent's browser_*
-    tools (e.g. browser_navigate / browser_snapshot) when the underlying Chrome
-    automation crashes or exits uncleanly. On Windows they accumulate under
-    --user-data-dir=...\agent-browser-chrome-<uuid> and can consume several GB
-    of RAM over time. We clean them at script startup to avoid resource leaks.
-    """
-    if _platform_module.system() != "Windows":
-        try:
-            subprocess.run(
-                ["pkill", "-f", "agent-browser-chrome"],
-                capture_output=True, timeout=15
-            )
-        except Exception:
-            pass
-        return
-    # Windows: find chrome.exe roots with agent-browser-chrome in cmdline but no --type=
-    try:
-        result = subprocess.run(
-            ["wmic", "process", "where", "name='chrome.exe'", "get", "ProcessId,CommandLine", "/format:csv"],
-            capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace"
-        )
-        if result.returncode != 0:
-            return
-        roots = []
-        for line in result.stdout.splitlines():
-            if "agent-browser-chrome" not in line:
-                continue
-            if "--type=" in line:
-                continue
-            # CSV format: Node,ProcessId,CommandLine
-            parts = line.split(",")
-            if len(parts) >= 2:
-                try:
-                    pid = int(parts[1].strip().strip('"'))
-                    roots.append(pid)
-                except ValueError:
-                    continue
-        for pid in roots:
-            try:
-                subprocess.run(
-                    ["taskkill", "/F", "/T", "/PID", str(pid)],
-                    capture_output=True, timeout=15
-                )
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-
-_cleanup_agent_browser_chrome()
+from visual_sampling import prepare_visuals, preserve_review_history, supplement
 
 # ============================================================
 # 数据模型
@@ -137,12 +85,17 @@ class TranscribeOutput:
     segments: List[dict] = field(default_factory=list)
     chapters: List[dict] = field(default_factory=list)
     source: str = ""
+    source_note: str = ""
+    audio_file: str = ""
+    visual_warnings: List[str] = field(default_factory=list)
     output_file: str = ""
     visual_frames: List[dict] = field(default_factory=list)
     visual_manifest_file: str = ""
     notes_md: str = ""  # 由 Agent 填充的 Markdown 笔记
     chunk_summaries_file: str = ""
     final_notes_file: str = ""
+    draft_notes_file: str = ""
+    transcript_chunks_file: str = ""
 
 # ============================================================
 # 工具函数
@@ -177,8 +130,8 @@ WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base").lower()
 TRANSCRIBER_TYPE = os.getenv("TRANSCRIBER_TYPE", "faster-whisper").lower()
 TRANSCRIPT_CHUNK_CHARS = int(os.getenv("VIDEO_NOTES_TRANSCRIPT_CHUNK_CHARS", "3200"))
 NOTES_TRANSCRIPT_PREVIEW_CHARS = int(os.getenv("VIDEO_NOTES_TRANSCRIPT_PREVIEW_CHARS", "1200"))
-MAX_AGENT_FRAMES = int(os.getenv("VIDEO_NOTES_MAX_AGENT_FRAMES", "3"))
-FRAME_MAX_WIDTH = int(os.getenv("VIDEO_NOTES_FRAME_MAX_WIDTH", "640"))
+MAX_AGENT_FRAMES = int(os.getenv("VIDEO_NOTES_MAX_AGENT_FRAMES", "24"))
+FRAME_MAX_WIDTH = int(os.getenv("VIDEO_NOTES_FRAME_MAX_WIDTH", "960"))
 VIDEO_NOTES_PROXY = os.getenv("VIDEO_NOTES_PROXY", "").strip()
 VIDEO_NOTES_PROXY_CONFIG = os.getenv("VIDEO_NOTES_PROXY_CONFIG", "")
 WHISPER_MODEL_CONFIG = os.getenv("VIDEO_NOTES_WHISPER_MODEL_CONFIG", "")
@@ -307,7 +260,7 @@ def get_bilibili_api_playurl(url: str, cid: int) -> Optional[dict]:
     if not bvid or not cid:
         return None
     referer = f"https://www.bilibili.com/video/{bvid}/"
-    api = f"https://api.bilibili.com/x/player/playurl?bvid={bvid}&cid={cid}&qn=32&fnval=16&fourk=0"
+    api = f"https://api.bilibili.com/x/player/playurl?bvid={bvid}&cid={cid}&qn=80&fnval=16&fourk=0"
     data = fetch_json_url(api, headers=bilibili_headers(referer))
     if not data or data.get("code") != 0:
         return None
@@ -323,7 +276,7 @@ def bilibili_dash_url_candidates(items: list, prefer_audio: bool = False) -> Lis
         bw = int(item.get("bandwidth", 0) or 0)
         url = item.get("baseUrl") or item.get("base_url") or ""
         mcdn_penalty = 1 if "mcdn.bilivideo" in url else 0
-        return (mcdn_penalty, -bw if prefer_audio else bw)
+        return (mcdn_penalty, -int(item.get("height", 0) or 0), -bw)
     urls = []
     for item in sorted(items, key=score):
         for key in ("baseUrl", "base_url"):
@@ -999,9 +952,9 @@ def build_chunk_summaries_markdown(output: TranscribeOutput, safe_id: str) -> st
     chunks = chunk_transcript_segments(output.segments)
 
     lines = [
-        f"# {title} - chunk summaries",
+        f"# {title} - complete transcript chunks (not summaries)",
         "",
-        "This file is intentionally compact. Use it before reading full transcript JSON.",
+        "Every segment is included. Read all chunks before synthesizing; no prefix truncation.",
         "",
         f"- Source: {output.source or 'unknown'}",
         f"- SegmentCount: {len(output.segments)}",
@@ -1020,7 +973,7 @@ def build_chunk_summaries_markdown(output: TranscribeOutput, safe_id: str) -> st
             "",
             f"- Segments: {len(chunk['segments'])}",
             f"- Characters: {chunk['char_count']}",
-            f"- Digest: {compact_text(chunk['text'], 900)}",
+            *[f"[{format_timestamp(float(seg.get('start', 0)))}-{format_timestamp(float(seg.get('end', 0)))}] {seg['text']}" for seg in chunk["segments"]],
             "",
         ])
     return "\n".join(lines).rstrip() + "\n"
@@ -1154,7 +1107,7 @@ def download_video_for_frames(url: str, output_dir: str, platform: str) -> Optio
     os.makedirs(frame_source_dir, exist_ok=True)
     output_template = os.path.join(frame_source_dir, "%(id)s.%(ext)s")
     cmd = yt_dlp_args() + [
-        "-f", "bestvideo[vcodec^=avc1][height<=720]+bestaudio/bestvideo[vcodec!=av01][height<=720]+bestaudio/best[height<=720]/best",
+        "-f", "bestvideo[vcodec^=avc1][height<=1080]+bestaudio/bestvideo[vcodec!=av01][height<=1080]+bestaudio/best[height<=1080]/best",
         "-o", output_template,
         "--no-playlist",
         "--merge-output-format", "mp4",
@@ -1182,178 +1135,17 @@ def download_video_for_frames(url: str, output_dir: str, platform: str) -> Optio
     return max(candidates, key=os.path.getmtime)
 
 
-def extract_visual_frames(video_path: str, output_dir: str, safe_id: str, duration: float,
-                          segments: List[dict], frame_interval: float = 30.0,
-                          max_frames: int = 8) -> List[FrameInfo]:
-    if not video_path or not os.path.exists(video_path):
-        return []
-
-    frames_dir = os.path.join(output_dir, f"{safe_id}_frames")
-    os.makedirs(frames_dir, exist_ok=True)
-
-    duration = float(duration or 0) or probe_media_duration(video_path)
-    frame_interval = max(1.0, float(frame_interval or 30.0))
-    max_frames = min(MAX_AGENT_FRAMES, max(1, int(max_frames or 8)))
-
-    if duration > 0:
-        # Prefer representative key frames across the whole video. The old interval-only
-        # behavior often produced only the opening seconds when max_frames was small,
-        # which caused agents to forget meaningful visual evidence.
-        if max_frames <= 1:
-            fractions = [0.5]
-        elif max_frames == 2:
-            fractions = [0.25, 0.75]
-        elif max_frames == 3:
-            fractions = [0.20, 0.50, 0.80]
-        else:
-            fractions = [(i + 1) / (max_frames + 1) for i in range(max_frames)]
-        timestamps = [min(max(1.0, duration * frac), max(1.0, duration - 1.0)) for frac in fractions]
-    else:
-        timestamps = [i * frame_interval for i in range(max_frames)]
-
-    frames = []
-    for index, timestamp in enumerate(timestamps, start=1):
-        image_path = os.path.join(frames_dir, f"frame_{index:03d}_{int(timestamp):06d}s.jpg")
-        cmd = [
-            FFMPEG, "-y",
-            "-ss", f"{timestamp:.3f}",
-            "-i", video_path,
-            "-frames:v", "1",
-            "-vf", f"scale=min({FRAME_MAX_WIDTH}\\,iw):-2",
-            "-q:v", "7",
-            image_path,
-        ]
-        result = run_command(cmd, timeout=120, env=command_env())
-        if result.returncode != 0 or not os.path.exists(image_path):
-            print(f"[vision] 抽帧失败 {format_timestamp(timestamp)}: {result.stderr[:160]}", file=sys.stderr)
-            continue
-        frames.append(FrameInfo(
-            index=index,
-            timestamp=timestamp,
-            timestamp_text=format_timestamp(timestamp),
-            image_path=os.path.abspath(image_path),
-            nearby_transcript=find_nearby_transcript(segments, timestamp),
-            visual_note="",
-        ))
-
-    if frames:
-        print(f"[vision] 已抽取视觉帧: {len(frames)} 张", file=sys.stderr)
-    return frames
-
-
 def build_notes_markdown(output: TranscribeOutput, safe_id: str) -> str:
-    info = output.video_info or {}
-    title = info.get("title") or safe_id
-    uploader = info.get("uploader") or ""
-    duration = format_timestamp(float(info.get("duration") or 0))
-    tags = info.get("tags") or []
-    source = output.source or "unknown"
+    title = output.video_info.get("title") or safe_id
+    return "\n".join([
+        f"# {title} — 素材草稿，尚未完成总结", "",
+        "状态：awaiting_agent_review。此文件不是用户终稿，不包含机器截断冒充的摘要。",
+        f"- 来源：{output.video_info.get('video_url', '')}",
+        f"- 完整分块转写：{output.transcript_chunks_file}",
+        f"- 视觉索引：{output.visual_manifest_file}",
+        f"- 目标终稿（由 Agent 创建）：{output.final_notes_file}", "",
+        "先阅读完整转写和视觉索引，实际查看图片；按需补看后综合生成终稿。", ""])
 
-    safe_title = str(title).replace('"', "'")
-    lines = [
-        "```mermaid",
-        "flowchart LR",
-        f"  V[\"{safe_title}\"] --> A[\"核心观点\"]",
-        "  V --> B[\"关键证据/案例\"]",
-        "  V --> C[\"方法/步骤\"]",
-        "  V --> D[\"风险与限制\"]",
-        "  V --> E[\"视觉证据/关键帧\"]",
-        "```",
-        "",
-        f"# {title}",
-        "",
-        "## 基本信息",
-        "",
-        f"- 来源：{source}",
-        f"- UP 主/作者：{uploader}" if uploader else "- UP 主/作者：未知",
-        f"- 时长：{duration}",
-    ]
-    if tags:
-        lines.append(f"- 标签：{', '.join(str(tag) for tag in tags)}")
-    if output.visual_frames:
-        lines.append(f"- 视觉帧：{len(output.visual_frames)} 张（已抽取并嵌入 Markdown；仍需模型逐帧补充真实视觉观察）")
-    if output.chunk_summaries_file:
-        lines.append(f"- 分块摘要：`{output.chunk_summaries_file}`")
-    lines.extend(["", "## 一句话总结", ""])
-
-    if output.transcript_text:
-        first_text = " ".join(output.transcript_text.split())[:180]
-        lines.append(first_text + ("……" if len(output.transcript_text) > 180 else ""))
-    else:
-        lines.append("该视频暂无可用转写文本，请结合视觉帧和元信息继续分析。")
-
-    lines.extend(["", "## 时间线与视觉证据", ""])
-    if output.visual_frames:
-        for frame in output.visual_frames:
-            ts = frame.get("timestamp_text", "00:00")
-            image_path = frame.get("image_path", "")
-            nearby = frame.get("nearby_transcript", "").strip()
-            visual_note = frame.get("visual_note", "").strip()
-            rel_path = image_path
-            try:
-                rel_path = os.path.relpath(image_path, os.path.dirname(output.output_file))
-            except Exception:
-                pass
-            rel_path = rel_path.replace(os.sep, "/")
-            lines.extend([
-                f"### {ts}",
-                "",
-                f"![视频截图 {ts}]({rel_path})" if image_path else "",
-                "",
-                f"*Frame path: `{rel_path}`*" if image_path else "",
-                "",
-            ])
-            if visual_note:
-                lines.extend([f"**视觉观察**：{visual_note}", ""])
-            else:
-                lines.extend(["**视觉观察**：pending visual review — 必须由多模态模型读取该帧后补充；若模型不支持图片输入，可使用 OCR fallback 并标注来源。", ""])
-            if nearby:
-                lines.extend([f"**附近转写**：{nearby}", ""])
-    elif output.segments:
-        for segment in output.segments[:12]:
-            ts = format_timestamp(float(segment.get("start", 0) or 0))
-            text = str(segment.get("text", "")).strip()
-            if text:
-                lines.append(f"- `{ts}` {text}")
-        lines.append("")
-    else:
-        lines.append("暂无时间线数据。")
-        lines.append("")
-
-    lines.extend(["## 结构化摘要", ""])
-    if output.segments:
-        chunk_size = max(1, len(output.segments) // 5)
-        for i in range(0, len(output.segments), chunk_size):
-            chunk = output.segments[i:i + chunk_size]
-            start = format_timestamp(float(chunk[0].get("start", 0) or 0))
-            text = " ".join(str(s.get("text", "")).strip() for s in chunk if str(s.get("text", "")).strip())[:260]
-            if text:
-                lines.append(f"- `{start}` {text}")
-    else:
-        lines.append("- 暂无字幕/转写内容。")
-
-    lines.extend(["", "## 转写预览", ""])
-    if output.transcript_text:
-        lines.append(compact_text(output.transcript_text, NOTES_TRANSCRIPT_PREVIEW_CHARS))
-        lines.append("")
-        lines.append("完整转写仅保存在结构化 JSON 中。为了避免 Claude Code 上下文溢出，默认不要整文件读取；先读分块摘要。")
-    else:
-        lines.append("暂无完整转写。")
-
-    if output.visual_manifest_file:
-        lines.extend(["", "## 关联文件", "", f"- 视觉清单：`{output.visual_manifest_file}`"])
-    if output.chunk_summaries_file:
-        lines.append(f"- 分块摘要：`{output.chunk_summaries_file}`")
-    if output.final_notes_file:
-        lines.append(f"- 最终笔记：`{output.final_notes_file}`")
-    if output.output_file:
-        lines.append(f"- 结构化数据：`{output.output_file}`")
-
-    return "\n".join(line for line in lines if line is not None).rstrip() + "\n"
-
-# ============================================================
-# 主流程
-# ============================================================
 
 def generate_transcript(url: str, output_dir: str = "./notes",
                         prefer_subtitle: bool = True, force_transcribe: bool = False,
@@ -1399,6 +1191,8 @@ def generate_transcript(url: str, output_dir: str = "./notes",
     elif platform == "youtube":
         m = re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", url)
         video_id = m.group(1) if m else "unknown"
+    elif platform == "local":
+        video_id = Path(url).stem
     else:
         video_id = url.split("/")[-1].split("?")[0][:50]
 
@@ -1411,6 +1205,7 @@ def generate_transcript(url: str, output_dir: str = "./notes",
     output = TranscribeOutput(
         video_info={
             "title": video_info_obj.title,
+            "video_url": url,
             "uploader": video_info_obj.uploader,
             "duration": video_info_obj.duration,
             "view_count": video_info_obj.view_count,
@@ -1424,7 +1219,7 @@ def generate_transcript(url: str, output_dir: str = "./notes",
     )
 
     # 1. 尝试字幕优先 (B站等)
-    if prefer_subtitle and platform in ("bilibili", "youtube"):
+    if prefer_subtitle and not force_transcribe and platform in ("bilibili", "youtube"):
         transcript = get_video_subtitles(url)
         if transcript and transcript.segments:
             print(f"[info] 字幕获取成功: {len(transcript.segments)} 段", file=sys.stderr)
@@ -1437,6 +1232,7 @@ def generate_transcript(url: str, output_dir: str = "./notes",
         print("[info] 字幕不可用，尝试下载音频...", file=sys.stderr)
         audio_meta = download_audio(url, output_dir, platform)
         if audio_meta:
+            output.audio_file = os.path.abspath(audio_meta.file_path)
             print(f"[info] 音频下载完成: {os.path.basename(audio_meta.file_path)} ({audio_meta.duration:.0f}s)", file=sys.stderr)
 
             if force_transcribe or TRANSCRIBER_TYPE == "faster-whisper" or get_whisper_cpp() or os.getenv("WHISPER_CPP"):
@@ -1450,7 +1246,7 @@ def generate_transcript(url: str, output_dir: str = "./notes",
                     output.source = TRANSCRIBER_TYPE if TRANSCRIBER_TYPE == "faster-whisper" else "whisper.cpp"
                 else:
                     output.source = "audio_only"
-                    output.source_note = f"音频已保存到: {audio_meta.file_path}，转写器未产出文本。"
+                    output.source_note = "转写器未产出文本；空结果不能单独证明没有语音。先查看视觉概览，必要时对音频做一次有针对性的核查。"
             else:
                 output.source = "audio_only"
                 output.source_note = f"音频已保存到: {audio_meta.file_path}，配置转写器后可自动转写。"
@@ -1462,47 +1258,47 @@ def generate_transcript(url: str, output_dir: str = "./notes",
 
     if extract_frames:
         video_path = download_video_for_frames(url, output_dir, platform)
-        frames = extract_visual_frames(
-            video_path=video_path,
-            output_dir=output_dir,
-            safe_id=safe_id,
-            duration=video_info_obj.duration,
-            segments=output.segments,
-            frame_interval=frame_interval,
-            max_frames=max_frames,
-        )
-        output.visual_frames = [asdict(frame) for frame in frames]
-        if output.visual_frames:
-            output.visual_manifest_file = os.path.join(output_dir, f"{safe_id}_visual_manifest.json")
-            with open(output.visual_manifest_file, "w", encoding="utf-8") as f:
-                json.dump({
-                    "video_info": output.video_info,
-                    "frames": output.visual_frames,
-                    "agent_read_policy": {
-                        "text_first": True,
-                        "max_images_per_model_request": 1,
-                        "default_image_action": "Do not open images unless visual evidence is required.",
-                        "fallback": "If image input is unavailable or context is tight, use timestamp and nearby_transcript only."
-                    },
-                    "instruction": "Use native multimodal image understanding only one frame at a time. Never send all frames plus transcript together. If image input is unavailable, use OCR only as fallback and label it OCR-derived.",
-                }, f, ensure_ascii=False, indent=2)
+        if video_path:
+            try:
+                visual = prepare_visuals(FFMPEG, video_path,
+                                         os.path.join(output_dir, f"{safe_id}_frames"),
+                                         output.segments, frame_interval, max_frames, FRAME_MAX_WIDTH)
+                output.visual_frames = visual["frames"]
+                output.video_info["duration"] = visual["duration"]
+                output.visual_manifest_file = os.path.join(output_dir, f"{safe_id}_visual_manifest.json")
+                if os.path.isfile(output.visual_manifest_file):
+                    with open(output.visual_manifest_file, encoding="utf-8") as previous:
+                        visual = preserve_review_history(visual, json.load(previous))
+                visual.update(video_info=output.video_info,
+                              agent_read_policy={"read": "Complete transcript plus timestamped visual candidates",
+                                                 "images": "Small related groups plus nearby text; sheets for overview, originals for details",
+                                                 "fallback": "Label unreadable or unseen evidence; never infer visual facts from transcript alone"})
+                with open(output.visual_manifest_file, "w", encoding="utf-8") as f:
+                    json.dump(visual, f, ensure_ascii=False, indent=2)
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+                output.visual_warnings.append(str(exc))
+                print(f"[vision] 抽帧失败，仍保存完整转写: {exc}", file=sys.stderr)
+        else:
+            output.visual_warnings.append("Video download unavailable; visual evidence is missing")
 
     output_file = os.path.join(output_dir, f"{safe_id}_transcript.json")
     chunk_summaries_file = os.path.join(output_dir, f"{safe_id}_chunk_summaries.md")
     final_notes_file = os.path.join(output_dir, f"{safe_id}_final_notes.md")
+    output.transcript_chunks_file = os.path.join(output_dir, f"{safe_id}_transcript_chunks.md")
+    output.draft_notes_file = os.path.join(output_dir, f"{safe_id}_draft_notes.md")
 
     output.output_file = output_file
     output.chunk_summaries_file = chunk_summaries_file
     output.final_notes_file = final_notes_file
     chunk_summaries_md = build_chunk_summaries_markdown(output, safe_id)
     with open(chunk_summaries_file, "w", encoding="utf-8") as f:
+        f.write("# Compatibility pointer — not a summary\n\nRead the complete transcript chunks: " + output.transcript_chunks_file + "\n")
+    with open(output.transcript_chunks_file, "w", encoding="utf-8") as f:
         f.write(chunk_summaries_md)
 
     output.notes_md = build_notes_markdown(output, safe_id)
-    notes_file = os.path.join(output_dir, f"{safe_id}_notes.md")
+    notes_file = output.draft_notes_file
     with open(notes_file, "w", encoding="utf-8") as f:
-        f.write(output.notes_md)
-    with open(final_notes_file, "w", encoding="utf-8") as f:
         f.write(output.notes_md)
 
     output_data = asdict(output)
@@ -1511,7 +1307,7 @@ def generate_transcript(url: str, output_dir: str = "./notes",
         json.dump(output_data, f, ensure_ascii=False, indent=2)
 
     print(f"\n{'='*60}", file=sys.stderr)
-    print(f"  转写完成！", file=sys.stderr)
+    print(f"  素材提取完成（不是最终笔记）", file=sys.stderr)
     print(f"{'='*60}", file=sys.stderr)
     print(f"  视频: {video_info_obj.title}", file=sys.stderr)
     print(f"  上传者: {video_info_obj.uploader}", file=sys.stderr)
@@ -1520,16 +1316,17 @@ def generate_transcript(url: str, output_dir: str = "./notes",
     print(f"  信息来源: {output.source}", file=sys.stderr)
     if output.segments:
         print(f"  段落数: {len(output.segments)}", file=sys.stderr)
-        print(f"  分块摘要: {chunk_summaries_file}", file=sys.stderr)
+        print(f"  完整分块转写: {output.transcript_chunks_file}", file=sys.stderr)
     print(f"  输出: {output_file}", file=sys.stderr)
     print(f"  笔记: {notes_file}", file=sys.stderr)
-    print(f"  最终笔记: {final_notes_file}", file=sys.stderr)
+    print(f"  素材草稿: {output.draft_notes_file}", file=sys.stderr)
+    print(f"  待 Agent 创建终稿: {final_notes_file}", file=sys.stderr)
     print(f"{'='*60}", file=sys.stderr)
     return output
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Video Notes Generator — 视频转录 (零pip依赖，支持whisper.cpp自动编译)",
+        description="Video Notes Generator — 完整转写、自适应视觉候选和局部补看",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -1545,17 +1342,33 @@ def main():
   VIDEO_NOTES_WHISPER_MODEL_CONFIG  自定义 faster-whisper 模型映射 JSON
         """
     )
-    parser.add_argument("url", help="视频 URL (Bilibili/YouTube/抖音) 或本地文件路径")
+    parser.add_argument("url", nargs="?", help="视频 URL (Bilibili/YouTube/抖音) 或本地文件路径")
     parser.add_argument("-o", "--output", default="./notes", help="输出目录 (默认: ./notes)")
     parser.add_argument("--no-subtitle", action="store_true", help="跳过字幕获取，直接下载音频")
-    parser.add_argument("--transcribe", action="store_true", help="强制使用 whisper.cpp 转写")
+    parser.add_argument("--transcribe", action="store_true", help="跳过字幕，强制使用已配置的转写后端")
     parser.add_argument("--model", default=None, help="whisper.cpp 模型 (默认读取 WHISPER_MODEL 环境变量或 base)")
     parser.add_argument("--frames", action="store_true", help="兼容旧参数：抽帧现在默认启用")
     parser.add_argument("--no-frames", action="store_true", help="紧急文本-only模式：跳过抽帧/附图；必须在最终报告中说明原因")
     parser.add_argument("--frame-interval", type=float, default=30.0, help="抽帧间隔秒数，默认 30")
     parser.add_argument("--max-frames", type=int, default=MAX_AGENT_FRAMES, help=f"最多抽取帧数，默认 {MAX_AGENT_FRAMES}")
     parser.add_argument("--print-full-json", action="store_true", help="危险：在 stdout 打印完整 JSON。默认只打印短摘要，避免 Claude Code 上下文溢出")
+    parser.add_argument("--review-manifest", help="Supplement an existing visual manifest without download/transcription")
+    parser.add_argument("--timestamps", help="Comma-separated seconds for supplemental frames")
+    parser.add_argument("--review-width", type=int, default=0, help="Supplemental width, 0 preserves source pixels")
+    parser.add_argument("--crop", help="Optional source-pixel x,y,width,height; preserve a full frame for context")
     args = parser.parse_args()
+    if args.review_manifest:
+        if not args.timestamps:
+            parser.error("--review-manifest requires --timestamps")
+        frames = supplement(FFMPEG, args.review_manifest,
+                            [float(t) for t in args.timestamps.split(",")], args.review_width,
+                            [int(n) for n in args.crop.split(",")] if args.crop else None)
+        print(json.dumps({"supplemental_frames": frames}, ensure_ascii=False, indent=2))
+        return 0
+    if not args.url:
+        parser.error("video URL or local path is required")
+    if args.frame_interval <= 0 or args.max_frames < 1:
+        parser.error("--frame-interval and --max-frames must be positive")
 
     global WHISPER_MODEL
     if args.model:
@@ -1575,17 +1388,23 @@ def main():
             print(json.dumps(asdict(output), ensure_ascii=False, indent=2))
         else:
             print(json.dumps({
-                "ok": True,
+                "ok": bool(output.segments or output.visual_frames),
+                "status": "materials_ready_not_final",
+                "draft_notes": output.draft_notes_file,
+                "transcript_chunks": output.transcript_chunks_file,
                 "source": output.source,
+                "source_note": output.source_note,
+                "audio_file": output.audio_file,
+                "visual_warnings": output.visual_warnings,
                 "segment_count": len(output.segments),
                 "frame_count": len(output.visual_frames),
                 "transcript_json": output.output_file,
                 "chunk_summaries": output.chunk_summaries_file,
                 "final_notes": output.final_notes_file,
                 "visual_manifest": output.visual_manifest_file,
-                "read_policy": "Read final_notes and chunk_summaries first. For video summaries, inspect representative frames one at a time and replace pending visual notes with native multimodal observations when available.",
+                "read_policy": "Read complete transcript_chunks and visual_manifest. Inspect related images with nearby text, supplement uncertain intervals, then create final_notes and evidence.json. Draft is not final.",
             }, ensure_ascii=False, indent=2))
-        return 0
+        return 0 if output.segments or output.visual_frames else 1
     except Exception as e:
         print(f"\n[error] 失败: {e}", file=sys.stderr)
         import traceback; traceback.print_exc(file=sys.stderr)

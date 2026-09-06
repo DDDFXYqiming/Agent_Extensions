@@ -1,47 +1,15 @@
-# Video Notes Generator - Current script configuration notes
-# The current video_to_notes.py script is configured by CLI flags and environment variables.
-# It does not read this YAML file directly; keep this file as a human reference only.
-
+# Human reference only; the script uses CLI flags/environment, not this YAML.
 cli:
-  usage: 'python scripts/video_to_notes.py "<video-url-or-local-file>" -o ./notes --frames --frame-interval 30 --max-frames 3'
-  unsupported_flags:
-    - --url
-    - --file
-    - --style
-    - --format
-    - --quality
-
-paths:
-  ytdlp_env: YTDLP
-  ffmpeg_env: FFMPEG
-  runtime_dir_env: VIDEO_NOTES_RUNTIME_DIR
-  env_file_env: VIDEO_NOTES_ENV
-
-transcription:
-  transcriber_type_env: TRANSCRIBER_TYPE
-  whisper_cpp_env: WHISPER_CPP
-  whisper_model_env: WHISPER_MODEL
-  # Auto-detected when unset: cuda/float16 if a discrete GPU is visible, else cpu/int8.
-  # cuda load failures fall back to cpu automatically instead of aborting transcription.
-  whisper_device_env: WHISPER_DEVICE
-  whisper_compute_type_env: WHISPER_COMPUTE_TYPE
-
-output:
-  directory_flag: -o/--output
-  transcript_json: '*_transcript.json'
-  chunk_summaries: '*_chunk_summaries.md'
-  final_notes: '*_final_notes.md'
-  visual_manifest: '*_visual_manifest.json'
-
+  usage: 'python scripts/video_to_notes.py "<url>" -o ./notes --frame-interval 30 --max-frames 24'
+  review: 'python scripts/video_to_notes.py --review-manifest ./notes/ID_visual_manifest.json --timestamps 12,13,14'
 frames:
-  enabled_flag: --frames
-  frame_interval_flag: --frame-interval
-  max_frames_flag: --max-frames
   max_agent_frames_env: VIDEO_NOTES_MAX_AGENT_FRAMES
+  default_max_frames: 24
   frame_max_width_env: VIDEO_NOTES_FRAME_MAX_WIDTH
-
+  default_width: 960
+  supplemental_width: 0
 agent_workflow:
-  - Read '*_final_notes.md' first.
-  - Read '*_chunk_summaries.md' before opening transcript JSON.
-  - When frames are extracted, read '*_visual_manifest.json'.
-  - Open at most one frame per model request and write visual observations back into the Markdown if needed.
+  - Read complete transcript_chunks and visual_manifest.
+  - Inspect sheets and related frames with matching text.
+  - Supplement ambiguous intervals and unreadable details.
+  - Write final_notes and evidence.json after actual review.

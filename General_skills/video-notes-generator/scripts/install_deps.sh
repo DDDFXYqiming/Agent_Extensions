@@ -54,11 +54,7 @@ echo ""
 echo "=== Installing Python packages ==="
 PIP_PACKAGES=(
     "yt-dlp"
-    "openai"
-    "requests"
-    "python-dotenv"
     "faster-whisper"
-    "pydantic"
 )
 
 for pkg in "${PIP_PACKAGES[@]}"; do

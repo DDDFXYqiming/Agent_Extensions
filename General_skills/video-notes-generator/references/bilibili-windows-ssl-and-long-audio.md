@@ -11,13 +11,13 @@ Use this reference when `video_to_notes.py` or yt-dlp has trouble downloading/tr
 5. Keep three artifacts:
    - `<BV>_transcript.json` — segment archive with global timestamps.
    - `<BV>_full_text.txt` — readable raw transcript for summarization.
-   - `<BV>_chunk_summaries.md` — compact timestamped chunk digests for context-safe note generation.
+   - `<BV>_transcript_chunks.md` — complete timestamped text chunks; the Agent may separately create semantic section summaries after reading every chunk.
 6. Verify completion before summarizing:
    - Transcript exists and has non-zero segments.
    - `last_end` is close to video duration.
    - Full text has enough characters for the expected duration.
    - Chunk count covers every split audio file.
-7. Generate a polished Markdown note from chunk summaries and selected transcript ranges; do not paste the whole raw transcript into the final answer.
+7. Read every complete transcript chunk and the visual evidence using SKILL.md, then generate polished Markdown. Legacy chunk_summaries files may contain only prefixes; they cannot stand in for complete transcript coverage. Do not paste the whole raw transcript into the final answer.
 8. In Feishu chat, if the user asked to receive the Markdown document, the normal final response can include `MEDIA:/absolute/path/to/file.md` so the gateway sends it as an attachment. Do not call `send_message` during ordinary chat turns.
 
 ## Why chunking matters
