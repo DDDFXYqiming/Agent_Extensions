@@ -27,6 +27,7 @@ Any agent framework (Claude Code / Codex / opencode / DSH / Hermes, etc.) can mo
 | [`vision-skill`](General_skills/vision-skill/) | Image recognition: a local image sent to a vision model for a description (Qwen dynamic resolution, OpenAI-compatible endpoint) | Python 3 + Pillow + vision model API key |
 | [`video-notes-generator`](General_skills/video-notes-generator/) | Video → structured Markdown notes (subtitles/transcription, timestamps, frame extraction, multimodal observation); supports Bilibili / YouTube / Douyin / Kuaishou / local files | Python 3 + `yt-dlp` + `ffmpeg`, see `scripts/install_deps.sh` |
 | [`generic-agent-code-run`](General_skills/generic-agent-code-run/) | Windows desktop and real-browser automation (Win32 / UIA / OCR / screenshot / CDP) with an observe-act-verify loop | Python 3 + matching libs, Windows |
+| [`bob-evidence-driven-engineering`](General_skills/bob-evidence-driven-engineering/) | Bob-style evidence-driven dev workflow: executable spec + deterministic tool gating + an independent QA subagent that signs off, so the implementer never approves its own work; "ship-able" is enforced by exit codes and git hooks | Python 3 (zero-dependency engine); optional pytest/coverage/radon/mutmut on the project side, auto-disabled with a notice when absent |
 
 > Every skill ships a `SKILL.md` (instructions the agent loads at runtime), plus `scripts/`, `templates/` and `references/` where needed.
 >
@@ -45,7 +46,8 @@ Agent_Extensions/
 ├── General_skills/            # General skills (framework-agnostic, mount-and-go)
 │   ├── vision-skill/
 │   ├── video-notes-generator/
-│   └── generic-agent-code-run/
+│   ├── generic-agent-code-run/
+│   └── bob-evidence-driven-engineering/
 ├── hermes_plugins/            # Hermes framework plugins
 │   └── language-router/
 └── README.md
@@ -87,6 +89,7 @@ DSH plugins live in their own repositories — see the install notes in each rep
 | vision-skill | Python 3 + Pillow, and an **OpenAI-compatible multimodal model** API key (Qwen-VL / MiniMax-M3 / Gemini / GPT-4o; default MiniMax-M3) |
 | video-notes-generator | Python 3 + `yt-dlp` + `ffmpeg`; subtitle-less videos transcribe locally with faster-whisper (discrete GPU auto-detected, falls back to CPU) |
 | generic-agent-code-run | Windows + Python 3, plus pywin32 / Pillow / uiautomation / pyperclip as needed |
+| bob-evidence-driven-engineering | Python 3 runs the engine (stdlib only, no key, no network); real quality gates need the project's own test/coverage/mutation tools — checks are disabled as placeholders with a notice when those are missing |
 | Hermes plugins | Hermes framework |
 
 ## ❓ FAQ

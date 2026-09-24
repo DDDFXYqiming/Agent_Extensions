@@ -27,6 +27,7 @@
 | [`vision-skill`](General_skills/vision-skill/) | 识图：本地图片 → 视觉模型描述（Qwen 动态分辨率，OpenAI 兼容接口） | Python 3 + Pillow + 视觉模型 API Key |
 | [`video-notes-generator`](General_skills/video-notes-generator/) | 视频 → 结构化 Markdown 笔记（字幕/转写、时间戳、抽帧、多模态观察），支持 B 站 / YouTube / 抖音 / 快手 / 本地文件 | Python 3 + yt-dlp + ffmpeg，见 `scripts/install_deps.sh` |
 | [`generic-agent-code-run`](General_skills/generic-agent-code-run/) | Windows 桌面应用与真实浏览器自动化（Win32 / UIA / OCR / 截图 / CDP），observe-act-verify 循环 | Python 3 + 对应库，Windows |
+| [`bob-evidence-driven-engineering`](General_skills/bob-evidence-driven-engineering/) | Bob 式证据驱动开发流程：可执行规格 + 确定性工具裁判 + 独立 QA 子代理放行，写代码的不自签，把“能不能交付”钉在退出码和 git 钩子上 | Python 3（引擎零依赖）；项目侧可选 pytest/coverage/radon/mutmut，缺失自动禁用对应检查 |
 
 > 每个技能都有 `SKILL.md`（智能体运行时加载的指令），按需附 `scripts/`、`templates/`、`references/`。
 >
@@ -45,7 +46,8 @@ Agent_Extensions/
 ├── General_skills/            # 通用技能（跨框架，挂载即用）
 │   ├── vision-skill/
 │   ├── video-notes-generator/
-│   └── generic-agent-code-run/
+│   ├── generic-agent-code-run/
+│   └── bob-evidence-driven-engineering/
 ├── hermes_plugins/            # Hermes 框架插件
 │   └── language-router/
 └── README.md
@@ -87,6 +89,7 @@ DSH 插件走独立仓库，安装方式见上表各仓库的 README。本仓库
 | vision-skill | Python 3 + Pillow，以及**任意 OpenAI 兼容多模态模型** API Key（Qwen-VL / MiniMax-M3 / Gemini / GPT-4o，默认 MiniMax-M3） |
 | video-notes-generator | Python 3 + `yt-dlp` + `ffmpeg`；无字幕时走 faster-whisper 本地转写（可选独显加速，自动探测） |
 | generic-agent-code-run | Windows + Python 3，按需装 pywin32 / Pillow / uiautomation / pyperclip |
+| bob-evidence-driven-engineering | Python 3 即可运行引擎（纯标准库，无 Key、无网络）；真实质量门禁需项目自带测试/覆盖率/变异工具，缺失时对应检查以占位禁用并提示启用 |
 | Hermes 插件 | Hermes 框架 |
 
 ## ❓ FAQ
