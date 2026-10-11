@@ -39,19 +39,28 @@ Any agent framework (Claude Code / Codex / opencode / DSH / Hermes, etc.) can mo
 |---|---|---|
 | [`language-router`](hermes_plugins/language-router/) v5.0 | Adaptive language routing, running Planner-first → Worker → optional Verifier → Digest (hooks such as `pre_llm_call`) | Hermes framework |
 
-## Directory layout
+```mermaid
+flowchart TD
+    subgraph Repo["Agent_Extensions Ecosystem Topology"]
+        subgraph General["Framework-Agnostic Skills (General_skills/)"]
+            Vision["<b>vision-skill</b><br/>Multimodal image perception & targeted crop inspection"]
+            Video["<b>video-notes-generator</b><br/>Video subtitle extraction, frame sampling & visual notes"]
+            Generic["<b>generic-agent-code-run</b><br/>Windows desktop & real-browser CDP automation loop"]
+            Bob["<b>bob-evidence-driven-engineering</b><br/>Deterministic test gating & independent QA sign-off"]
+        end
+        subgraph Hermes["Hermes Framework Extensions (hermes_plugins/)"]
+            Router["<b>language-router</b><br/>Adaptive phase routing & LLM lifecycle hook integration"]
+        end
+    end
+```
 
-```
-Agent_Extensions/
-├── General_skills/            # General skills (framework-agnostic, mount-and-go)
-│   ├── vision-skill/
-│   ├── video-notes-generator/
-│   ├── generic-agent-code-run/
-│   └── bob-evidence-driven-engineering/
-├── hermes_plugins/            # Hermes framework plugins
-│   └── language-router/
-└── README.md
-```
+* **`General_skills/`**: Cross-framework agent skills (Claude Code, Codex, DSH, Hermes, etc.)
+  * `vision-skill/`: Local image multimodal description and inspection
+  * `video-notes-generator/`: Multi-platform video to structured markdown notes
+  * `generic-agent-code-run/`: Win32 / UIA / CDP desktop and browser automation
+  * `bob-evidence-driven-engineering/`: Deterministic quality gating and independent QA sign-off
+* **`hermes_plugins/`**: Hermes framework plugins
+  * `language-router/`: Staged planner-worker adaptive language router
 
 ## 🚀 Quick start
 

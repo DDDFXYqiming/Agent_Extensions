@@ -39,19 +39,28 @@
 |---|---|---|
 | [`language-router`](hermes_plugins/language-router/) v5.0 | 自适应语言路由，流程为 Planner-first → Worker → 可选 Verifier → Digest（hooks 挂载 `pre_llm_call` 等） | Hermes 框架 |
 
-## 目录结构
+```mermaid
+flowchart TD
+    subgraph Repo["Agent_Extensions 技能与插件矩阵"]
+        subgraph General["通用跨框架技能 (General_skills/)"]
+            Vision["<b>vision-skill</b><br/>多模态视觉感知与局部裁剪识图"]
+            Video["<b>video-notes-generator</b><br/>视频字幕、抽帧与图文笔记生成"]
+            Generic["<b>generic-agent-code-run</b><br/>Windows 桌面与 CDP 浏览器真实操控"]
+            Bob["<b>bob-evidence-driven-engineering</b><br/>证据驱动质量门禁与独立 QA 放行"]
+        end
+        subgraph Hermes["Hermes 架构专用扩展 (hermes_plugins/)"]
+            Router["<b>language-router</b><br/>自适应阶段化语言路由与切面钩子"]
+        end
+    end
+```
 
-```
-Agent_Extensions/
-├── General_skills/            # 通用技能（跨框架，挂载即用）
-│   ├── vision-skill/
-│   ├── video-notes-generator/
-│   ├── generic-agent-code-run/
-│   └── bob-evidence-driven-engineering/
-├── hermes_plugins/            # Hermes 框架插件
-│   └── language-router/
-└── README.md
-```
+* **`General_skills/`**：跨框架通用技能（Claude Code、Codex、DSH、Hermes 等挂载即用）
+  * `vision-skill/`：本地图片多模态视觉描述
+  * `video-notes-generator/`：多平台视频多模态结构化笔记
+  * `generic-agent-code-run/`：Win32 / UIA / CDP 桌面与浏览器自动化
+  * `bob-evidence-driven-engineering/`：确定性代码质量裁判与独立 QA 门禁
+* **`hermes_plugins/`**：Hermes 框架生命周期插件
+  * `language-router/`：多阶段规划者-执行者自适应路由
 
 ## 🚀 快速开始
 
