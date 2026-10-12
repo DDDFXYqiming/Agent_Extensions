@@ -4,14 +4,29 @@ description: "Summarize video URLs or local videos into timestamped Markdown not
 license: MIT
 metadata:
   compatibility: Python, yt-dlp, ffmpeg/ffprobe; faster-whisper or whisper.cpp for ASR; optional Pillow.
-  version: "1.4.0"
+  version: "1.4.1"
   author: Diana (extracted from BiliNote v2.4.0 by JefferyHcool)
   platforms: linux, macos, windows
+  source_repo: https://github.com/DDDFXYqiming/Agent_Extensions/tree/main/General_skills/video-notes-generator
+  source_subdir: General_skills/video-notes-generator
+  install_path: ~/.dsh/skills/video-notes-generator
 ---
 
 # Video notes generator
 
 脚本负责获取、完整转写分块和本地视觉候选筛选；当前 Agent 负责原生读图、按需补查和综合笔记。脚本不调用总结模型、不自动安装依赖。
+
+## 来源与更新
+
+| 项 | 值 |
+|---|---|
+| 源仓库 | https://github.com/DDDFXYqiming/Agent_Extensions |
+| 仓库内路径 | `General_skills/video-notes-generator` |
+| 本地 clone | `C:\Users\39795\Desktop\AI_project\Agent_Extensions` |
+| 运行副本 | `~/.dsh/skills/video-notes-generator`；若本机装了 codex 客户端，同步到 `~/.codex/skills/video-notes-generator` |
+| 同步方式 | 改源树后 robocopy `/E` 到运行副本（先备份运行副本 `.env`），不要直接改运行副本 |
+
+更新流程：源仓库 `git pull`（`main` 跟踪 `origin/main`）→ 改动落在 `General_skills/video-notes-generator` → robocopy 同步 → 同步 codex 侧 → 校验两边文件 MD5 一致。运行副本里若有 `.env` 等本地配置，同步前备份、同步后还原。
 
 ## 获取素材
 

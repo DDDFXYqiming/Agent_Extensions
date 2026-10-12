@@ -2,6 +2,10 @@
 
 SKILL.md 只保留给智能体的执行指令；版本历史与实测数据放这里。
 
+## 1.4.1
+
+SKILL.md 新增「来源与更新」小节，frontmatter 增加 `source_repo` / `source_subdir` / `install_path`：写明源仓库 DDDFXYqiming/Agent_Extensions 与仓库内路径 `General_skills/video-notes-generator`、本地 clone 位置、运行副本路径和 robocopy 同步流程，避免后续更新时找不到来源或误改运行副本。
+
 ## 1.4.0
 
 转写模型从“写死模型名”改为“逻辑档位 + 集中映射 + 失败降级”，解决 skill 文本随模型换代过时、以及单模型下载失败整条链路卡死两个问题。
