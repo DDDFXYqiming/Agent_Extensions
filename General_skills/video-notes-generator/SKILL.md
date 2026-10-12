@@ -4,7 +4,7 @@ description: "Summarize video URLs or local videos into timestamped Markdown not
 license: MIT
 metadata:
   compatibility: Python, yt-dlp, ffmpeg/ffprobe; faster-whisper or whisper.cpp for ASR; optional Pillow.
-  version: "1.3.0"
+  version: "1.4.0"
   author: Diana (extracted from BiliNote v2.4.0 by JefferyHcool)
   platforms: linux, macos, windows
 ---
@@ -19,7 +19,9 @@ metadata:
 python <skill>/scripts/video_to_notes.py "<video-url-or-local-file>" -o ./notes
 ```
 
-字幕优先，无字幕使用 faster-whisper（默认 base）或 whisper.cpp。正常任务保留视觉采样；下载/抽帧失败可重试一次，仍失败明确报告证据缺口。`--no-frames` 仅用于用户指定纯文本或明确报告的降级。
+字幕优先，无字幕使用 faster-whisper（默认 default 档）或 whisper.cpp。正常任务保留视觉采样；下载/抽帧失败可重试一次，仍失败明确报告证据缺口。`--no-frames` 仅用于用户指定纯文本或明确报告的降级。
+
+转写模型用档位而非具体模型名：`WHISPER_MODEL=default`（或省略）为日常档，`WHISPER_MODEL=high` 用于重要或嘈杂语音。档位映射集中在 runtime `config/whisper_models.json` 的 `tiers` 键，脚本按序尝试并在失败时沿候选链自动降级、在 stderr 与 `source_note` 报告实际模型。选用 high 档前检查映射文件的 `tiers_updated`：超过 6 个月或文件缺失时，先联网检索 faster-whisper 当前推荐模型、更新 `tiers` 与日期再运行；检索结果只写映射文件，不改本文件。发生降级时终稿必须披露实际使用的模型。
 
 每个视频使用独立输出目录。已有 manifest 时补看不必重跑下载转写。重跑素材步骤不覆盖 Agent 终稿；源文件变化后须重新核对旧终稿。
 
@@ -59,7 +61,7 @@ python <skill>/scripts/video_to_notes.py --review-manifest ./notes/ID_visual_man
 | `--max-frames` / `VIDEO_NOTES_MAX_AGENT_FRAMES` | 24，初始候选上限；CLI优先，不再被环境变量夹到3 |
 | `VIDEO_NOTES_FRAME_MAX_WIDTH` | 960，初始单帧宽度上限；补看可保留源像素 |
 | `YTDLP` / `FFMPEG` / `FFPROBE` | 二进制路径，默认探测；runtime `.env` 可配置 |
-| `TRANSCRIBER_TYPE` / `WHISPER_MODEL` | faster-whisper / base；重要或嘈杂语音可选 large-v3-turbo |
+| `TRANSCRIBER_TYPE` / `WHISPER_MODEL` | faster-whisper / default 档；重要或嘈杂语音用 high 档。档位是逻辑名，具体模型名单见 runtime `config/whisper_models.json` 的 `tiers` 键 |
 | `WHISPER_DEVICE` / `WHISPER_COMPUTE_TYPE` | 自动CUDA后回退CPU，显式配置优先 |
 | `VIDEO_NOTES_PROXY` | 网络代理；亦支持runtime config/proxy.json和标准代理变量 |
 | `VIDEO_NOTES_RUNTIME_DIR` | 默认 ~/.cache/video-notes-generator |

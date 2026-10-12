@@ -2,6 +2,17 @@
 
 SKILL.md 只保留给智能体的执行指令；版本历史与实测数据放这里。
 
+## 1.4.0
+
+转写模型从“写死模型名”改为“逻辑档位 + 集中映射 + 失败降级”，解决 skill 文本随模型换代过时、以及单模型下载失败整条链路卡死两个问题。
+
+- `WHISPER_MODEL` 接受档位名（`default`/`high`）或具体模型名；档位映射集中在 runtime `config/whisper_models.json` 的 `tiers` 键（有序候选链），新增 `templates/whisper_models.json` 示例。新模型出现只改该 JSON，SKILL.md 保持零模型名。
+- 联网刷新触发写进 SKILL.md：选用 high 档且 `tiers_updated` 超过 6 个月或缺失时，先联网查 faster-whisper 当前推荐模型、更新映射再运行；检索结果只写映射文件。
+- faster-whisper 与 whisper.cpp 两条后端都按候选链逐个尝试，解析/下载/设备失败自动降级并在 stderr 报告；实际使用模型与首个失败原因写入输出 JSON 的 `source_note`，SKILL.md 要求终稿披露。
+- 自定义映射向后兼容：原有扁平 `{"别名": "repo"}` 与新增 `models` 键均可；`tiers` 为保留键。
+
+实测（RTX 2070，15s 中文 TTS 视频）：自定义 tiers 首候选为不存在模型 → 解析失败即降级 tiny 转写 3 段且 `source_note` 携带降级说明；无配置 `default` 档回归 base 正常；`HF_HUB_OFFLINE=1` 下 high 档命中本机已缓存的档顶模型时直接使用、不误报降级（档位名不等于降级，以候选链首个元素为基准）。
+
 ## 1.3.0
 
 - 完整带时间戳 transcript_chunks 取代截断冒充的分块摘要；旧 chunk_summaries 文件保留为导航指针。脚本输出 draft_notes，Agent 完成图文理解后创建 final_notes，素材重试不覆盖终稿。

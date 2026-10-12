@@ -1,0 +1,11 @@
+{
+  "_readme": "Copy to <VIDEO_NOTES_RUNTIME_DIR>/config/whisper_models.json (default ~/.cache/video-notes-generator/config/). tiers are ordered candidate chains: the script tries each in turn and degrades loudly on failure. When selecting the high tier, check tiers_updated; if older than 6 months or missing, web-search current faster-whisper model recommendations, update tiers and the date, then run. Only this file changes when new models appear — SKILL.md stays tier-only.",
+  "tiers": {
+    "default": ["base"],
+    "high": ["large-v3-turbo", "large-v3", "small", "base"]
+  },
+  "tiers_updated": "2026-10-12",
+  "models": {
+    "_example-alias": "Systran/faster-whisper-large-v3"
+  }
+}

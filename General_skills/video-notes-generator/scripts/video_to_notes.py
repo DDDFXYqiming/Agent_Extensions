@@ -25,7 +25,7 @@ import urllib.request
 from dataclasses import asdict, dataclass, field
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 from visual_sampling import prepare_visuals, preserve_review_history, supplement
@@ -148,6 +148,17 @@ BUILTIN_FASTER_WHISPER_MODELS = {
     "large-v3": "Systran/faster-whisper-large-v3",
     "large-v3-turbo": "Systran/faster-whisper-large-v3-turbo",
 }
+
+# 模型档位（tier）：SKILL.md 只引用逻辑档位名，不出现具体模型名。
+# 新模型出现时只更新 runtime config/whisper_models.json 的 "tiers" 键
+# （并刷新 "tiers_updated" 日期）；这里的内置表仅是缺配置时的出厂兜底。
+DEFAULT_MODEL_TIERS = {
+    "default": ["base"],
+    "high": ["large-v3-turbo", "large-v3", "small", "base"],
+}
+
+# 最近一次转写的实际模型与降级说明，由 generate_transcript 写进 source_note。
+LAST_TRANSCRIPTION_NOTE = ""
 
 
 def runtime_path(*parts):
@@ -406,18 +417,57 @@ def download_bilibili_via_api(url: str, output_dir: str) -> Optional[AudioMeta]:
     )
 
 
+def get_whisper_model_config_path() -> str:
+    return os.getenv("VIDEO_NOTES_WHISPER_MODEL_CONFIG", WHISPER_MODEL_CONFIG) or runtime_path("config", "whisper_models.json")
+
+
+def get_model_tiers() -> Dict[str, List[str]]:
+    """合并内置档位与 runtime 配置（配置优先）。
+
+    config/whisper_models.json 结构：
+      {"models": {"别名": "HF/repo-or-local-path"},   # 原有扁平映射也可直接写顶层，保持兼容
+       "tiers": {"high": ["模型A", "模型B"], ...},     # 有序候选，第一个最想要，其余为降级链
+       "tiers_updated": "YYYY-MM-DD"}                  # 上次联网刷新日期，供 SKILL.md 过期触发判断
+    """
+    tiers = {k: list(v) for k, v in DEFAULT_MODEL_TIERS.items()}
+    cfg = _read_json_file(get_whisper_model_config_path())
+    custom_tiers = cfg.get("tiers")
+    if isinstance(custom_tiers, dict):
+        for name, models in custom_tiers.items():
+            if isinstance(models, str):
+                models = [models]
+            if isinstance(models, list) and models and all(isinstance(m, str) and m.strip() for m in models):
+                tiers[str(name).strip().lower()] = [m.strip() for m in models]
+    return tiers
+
+
+def resolve_whisper_model_candidates(model: str) -> Tuple[str, List[str]]:
+    """把请求的模型/档位展开为有序候选列表。返回 (请求名, 候选链)。
+
+    请求名是档位 → 候选 = 该档位的有序列表；
+    请求名是具体模型 → 候选 = [该模型] + default 档降级链（失败时响亮降级，不静默断链）。
+    """
+    name = (model or "base").strip().lower()
+    tiers = get_model_tiers()
+    if name in tiers:
+        return name, list(tiers[name])
+    fallback = tiers.get("fallback") or tiers.get("default") or ["base"]
+    return name, [name] + [m for m in fallback if m != name]
+
+
 def resolve_faster_whisper_model(model: str) -> str:
     """Resolve built-in/custom Faster Whisper model names.
 
     Custom mappings live in VIDEO_NOTES_WHISPER_MODEL_CONFIG or
-    <runtime>/config/whisper_models.json as {"name": "HF/repo-or-local-path"}.
+    <runtime>/config/whisper_models.json as {"name": "HF/repo-or-local-path"}
+    (top-level or under a "models" key; "tiers" is reserved for tier chains).
     This mirrors BiliNote v2.4.0's configurable model registry without
     introducing a server-side dependency tree.
     """
     name = (model or "base").strip()
-    custom_path = os.getenv("VIDEO_NOTES_WHISPER_MODEL_CONFIG", WHISPER_MODEL_CONFIG) or runtime_path("config", "whisper_models.json")
-    custom = _read_json_file(custom_path)
-    target = custom.get(name)
+    custom = _read_json_file(get_whisper_model_config_path())
+    models_map = custom.get("models") if isinstance(custom.get("models"), dict) else custom
+    target = models_map.get(name)
     if isinstance(target, dict):
         target = target.get("target")
     if isinstance(target, str) and target.strip():
@@ -631,36 +681,50 @@ def transcribe_via_whisper_cpp(audio_path: str, model: str = "base") -> Optional
         os.path.join(os.path.dirname(whisper_bin), "models"),
     ]
 
-    # 查找模型文件
+    # 档位/模型展开为有序候选链，逐候选查找本地模型文件，缺失时尝试下载
+    requested, candidates = resolve_whisper_model_candidates(model)
     model_file = None
-    for model_dir in model_dirs:
-        for ext in [".gguf", ".ggml", ".bin", ".q5_1.bin", ".q8_0.bin"]:
-            candidate = os.path.join(model_dir, f"ggml-{model}{ext}")
-            if os.path.exists(candidate):
-                model_file = candidate
+    used_model = None
+    for cand in candidates:
+        for model_dir in model_dirs:
+            for ext in [".gguf", ".ggml", ".bin", ".q5_1.bin", ".q8_0.bin"]:
+                candidate_path = os.path.join(model_dir, f"ggml-{cand}{ext}")
+                if os.path.exists(candidate_path):
+                    model_file = candidate_path
+                    used_model = cand
+                    break
+            if model_file:
                 break
         if model_file:
             break
-
-    if not model_file:
-        print(f"[transcribe] 模型 {model} 未找到，尝试自动下载...", file=sys.stderr)
+        print(f"[transcribe] 模型 {cand} 未找到，尝试自动下载...", file=sys.stderr)
         try:
             download_script = os.path.join(whisper_root, "models", "download-ggml-model.sh")
             if os.path.exists(download_script):
                 subprocess.run(
-                    ["bash", download_script, model],
+                    ["bash", download_script, cand],
                     capture_output=True, timeout=300, cwd=whisper_root
                 )
             for mdir in model_dirs:
                 for ext in [".gguf", ".ggml", ".bin", ".q5_1.bin", ".q8_0.bin"]:
-                    candidate = os.path.join(mdir, f"ggml-{model}{ext}")
-                    if os.path.exists(candidate):
-                        model_file = candidate
+                    candidate_path = os.path.join(mdir, f"ggml-{cand}{ext}")
+                    if os.path.exists(candidate_path):
+                        model_file = candidate_path
+                        used_model = cand
                         break
                 if model_file:
                     break
         except Exception as e:
-            print(f"[transcribe] 模型下载失败: {e}", file=sys.stderr)
+            print(f"[transcribe] 模型 {cand} 下载失败: {e}", file=sys.stderr)
+        if not model_file and cand != candidates[-1]:
+            print(f"[transcribe] 模型 '{cand}' 获取失败，沿候选链降级重试", file=sys.stderr)
+
+    if used_model and used_model != candidates[0]:
+        global LAST_TRANSCRIPTION_NOTE
+        LAST_TRANSCRIPTION_NOTE = (
+            f"请求模型 '{requested}' 的首选候选不可用，已沿候选链降级为 '{used_model}'。交付时需披露实际使用的转写模型。"
+        )
+        print(f"[transcribe] 降级: {LAST_TRANSCRIPTION_NOTE}", file=sys.stderr)
 
     if not model_file:
         print(f"[transcribe] whisper.cpp: 模型获取失败，跳过转写", file=sys.stderr)
@@ -676,7 +740,7 @@ def transcribe_via_whisper_cpp(audio_path: str, model: str = "base") -> Optional
             capture_output=True, timeout=300
         )
 
-    print(f"[transcribe] whisper.cpp 转写中 (model={model})...", file=sys.stderr)
+    print(f"[transcribe] whisper.cpp 转写中 (model={used_model or model})...", file=sys.stderr)
     try:
         result = subprocess.run(
             [whisper_bin, "-m", model_file, "-f", wav_path,
@@ -711,6 +775,8 @@ def transcribe_via_whisper_cpp(audio_path: str, model: str = "base") -> Optional
 
 
 def transcribe_via_faster_whisper(audio_path: str, model: str = "base") -> Optional[List[TranscriptSegment]]:
+    global LAST_TRANSCRIPTION_NOTE
+    LAST_TRANSCRIPTION_NOTE = ""
     enable_cuda_runtime()  # 必须在 import 之前：Windows 下 cublas 只认 PATH
     try:
         os.environ.setdefault("HF_HOME", runtime_path("hf-cache"))
@@ -724,27 +790,46 @@ def transcribe_via_faster_whisper(audio_path: str, model: str = "base") -> Optio
     gpus = detect_gpus()
     print(f"[transcribe] 显卡: {gpus or '未探测到'}（faster-whisper 仅支持 NVIDIA/cuda，其余见 SKILL.md 算力小节）", file=sys.stderr)
     os.makedirs(runtime_path("models"), exist_ok=True)
-    resolved_model = resolve_faster_whisper_model(model)
-    last_err = None
-    for device, compute_type in whisper_device_candidates():
+    requested, candidates = resolve_whisper_model_candidates(model)
+    if len(candidates) > 1:
+        print(f"[transcribe] 模型候选链（'{requested}'）: {' -> '.join(candidates)}", file=sys.stderr)
+    first_err = None
+    for candidate in candidates:
         try:
-            print(f"[transcribe] faster-whisper 转写中 (model={model} -> {resolved_model}, device={device}, compute_type={compute_type})...", file=sys.stderr)
-            whisper_model = WhisperModel(
-                resolved_model,
-                device=device,
-                compute_type=compute_type,
-                download_root=runtime_path("models"),
-            )
-            raw_segments, _ = whisper_model.transcribe(audio_path, language="zh", vad_filter=True)
-            segments = [TranscriptSegment(start=s.start, end=s.end, text=s.text.strip()) for s in raw_segments if s.text.strip()]
-            if segments:
-                print(f"[transcribe] faster-whisper 转写完成: {len(segments)} 段 (device={device})", file=sys.stderr)
-            return segments if segments else None
+            resolved_model = resolve_faster_whisper_model(candidate)
         except Exception as e:
-            # 显存不足 / CUDA 不可用时退回 CPU，不让整条转写链路断掉
-            last_err = e
-            print(f"[transcribe] device={device} 失败，尝试下一个: {e}", file=sys.stderr)
-    print(f"[transcribe] faster-whisper 转写失败: {last_err}", file=sys.stderr)
+            print(f"[transcribe] 候选模型 '{candidate}' 解析失败，尝试下一个: {e}", file=sys.stderr)
+            first_err = first_err or e
+            continue
+        last_err = None
+        for device, compute_type in whisper_device_candidates():
+            try:
+                print(f"[transcribe] faster-whisper 转写中 (model={candidate} -> {resolved_model}, device={device}, compute_type={compute_type})...", file=sys.stderr)
+                whisper_model = WhisperModel(
+                    resolved_model,
+                    device=device,
+                    compute_type=compute_type,
+                    download_root=runtime_path("models"),
+                )
+                raw_segments, _ = whisper_model.transcribe(audio_path, language="zh", vad_filter=True)
+                segments = [TranscriptSegment(start=s.start, end=s.end, text=s.text.strip()) for s in raw_segments if s.text.strip()]
+                if candidate != candidates[0]:
+                    LAST_TRANSCRIPTION_NOTE = (
+                        f"请求模型 '{requested}' 的首选候选不可用，已沿候选链降级为 '{candidate}'"
+                        f"（首个失败原因: {first_err}）。交付时需披露实际使用的转写模型。"
+                    )
+                    print(f"[transcribe] 降级: {LAST_TRANSCRIPTION_NOTE}", file=sys.stderr)
+                if segments:
+                    print(f"[transcribe] faster-whisper 转写完成: {len(segments)} 段 (model={candidate}, device={device})", file=sys.stderr)
+                return segments if segments else None
+            except Exception as e:
+                # 显存不足 / CUDA 不可用时退回 CPU，不让整条转写链路断掉
+                last_err = e
+                print(f"[transcribe] device={device} 失败，尝试下一个: {e}", file=sys.stderr)
+        first_err = first_err or last_err
+        if candidate != candidates[-1]:
+            print(f"[transcribe] 模型 '{candidate}' 全部设备失败，沿候选链降级重试", file=sys.stderr)
+    print(f"[transcribe] faster-whisper 转写失败: {first_err}", file=sys.stderr)
     return None
 
 
@@ -1244,6 +1329,8 @@ def generate_transcript(url: str, output_dir: str = "./notes",
                     output.transcript_text = "\n".join(s.text for s in whisper_segments)
                     output.segments = [asdict(s) for s in whisper_segments]
                     output.source = TRANSCRIBER_TYPE if TRANSCRIBER_TYPE == "faster-whisper" else "whisper.cpp"
+                    if LAST_TRANSCRIPTION_NOTE:
+                        output.source_note = LAST_TRANSCRIPTION_NOTE
                 else:
                     output.source = "audio_only"
                     output.source_note = "转写器未产出文本；空结果不能单独证明没有语音。先查看视觉概览，必要时对音频做一次有针对性的核查。"
@@ -1337,16 +1424,17 @@ def main():
 
 环境变量:
   WHISPER_CPP    whisper.cpp 二进制路径 (默认自动查找)
-  WHISPER_MODEL  转写模型 (默认: base, 可选: tiny/base/small/medium/large-v3/large-v3-turbo 或自定义映射)
+  WHISPER_MODEL  转写模型档位或具体模型 (默认: default 档=base；重要/嘈杂语音用 high 档；
+                 档位映射见 config/whisper_models.json 的 "tiers" 键，失败自动沿候选链降级)
   VIDEO_NOTES_PROXY  显式代理 URL；未设置时回退 config/proxy.json 与 HTTP_PROXY/HTTPS_PROXY
-  VIDEO_NOTES_WHISPER_MODEL_CONFIG  自定义 faster-whisper 模型映射 JSON
+  VIDEO_NOTES_WHISPER_MODEL_CONFIG  自定义 faster-whisper 模型映射与档位 JSON
         """
     )
     parser.add_argument("url", nargs="?", help="视频 URL (Bilibili/YouTube/抖音) 或本地文件路径")
     parser.add_argument("-o", "--output", default="./notes", help="输出目录 (默认: ./notes)")
     parser.add_argument("--no-subtitle", action="store_true", help="跳过字幕获取，直接下载音频")
     parser.add_argument("--transcribe", action="store_true", help="跳过字幕，强制使用已配置的转写后端")
-    parser.add_argument("--model", default=None, help="whisper.cpp 模型 (默认读取 WHISPER_MODEL 环境变量或 base)")
+    parser.add_argument("--model", default=None, help="转写模型档位 (default/high) 或具体模型名 (默认读取 WHISPER_MODEL 环境变量或 default 档)")
     parser.add_argument("--frames", action="store_true", help="兼容旧参数：抽帧现在默认启用")
     parser.add_argument("--no-frames", action="store_true", help="紧急文本-only模式：跳过抽帧/附图；必须在最终报告中说明原因")
     parser.add_argument("--frame-interval", type=float, default=30.0, help="抽帧间隔秒数，默认 30")
